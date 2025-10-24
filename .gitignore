@@ -1,0 +1,7 @@
+.cache/
+.claude/
+build/
+*.bat
+*.log
+*.wal   
+qindb.db/
