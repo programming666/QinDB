@@ -284,8 +284,8 @@ qindb/
 ## 联系方式
 邮箱：mailto:contact@qinyining.cn
 
-- **项目主页**: https://github.com/programming666/qindb
-- **问题反馈**: https://github.com/programming666/qindb/issues
+- **项目主页**: https://github.com/programming666/QinDB
+- **问题反馈**: https://github.com/programming666/QinDB/issues
 
 ## 致谢
 
