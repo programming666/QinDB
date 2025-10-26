@@ -2,6 +2,7 @@
 #include <QTextStream>
 #include <iostream>
 #include <string>
+#include <QtNetwork/QTcpSocket>
 #include "qindb/logger.h"
 #include "qindb/lexer.h"
 #include "qindb/parser.h"
@@ -304,6 +305,115 @@ void analyzeSql(const QString& sql, qindb::Executor* executor) {
     writeAnalysisLog(sql, analysisLog);
 }
 
+/**
+ * @brief 运行客户端模式
+ * @param host 服务器主机地址
+ * @param port 服务器端口
+ * @return 客户端程序退出代码
+ */
+int runClientMode(const QString& host, uint16_t port) {
+    std::wcout << L"正在连接到服务器 " << host.toStdWString() << L":" << port << L"...\n" << std::endl;
+
+    // 创建TCP连接
+    QTcpSocket socket;
+    socket.connectToHost(host, port);
+
+    if (!socket.waitForConnected(5000)) {
+        std::wcout << L"✗ 无法连接到服务器: " << socket.errorString().toStdWString() << L"\n" << std::endl;
+        return 1;
+    }
+
+    std::wcout << L"✓ 已成功连接到服务器\n" << std::endl;
+
+    // 简单的客户端交互循环
+    std::wstring line;
+    std::wstring sqlBuffer;
+
+    while (true) {
+        // 显示提示符
+        if (sqlBuffer.empty()) {
+            std::wcout << L"qindb> " << std::flush;
+        } else {
+            std::wcout << L"    -> " << std::flush;
+        }
+
+        // 读取一行
+        if (!std::getline(std::wcin, line)) {
+            break; // EOF (Ctrl+D / Ctrl+Z)
+        }
+
+        // 移除首尾空格
+        size_t start = line.find_first_not_of(L" \t\r\n");
+        size_t end = line.find_last_not_of(L" \t\r\n");
+        if (start == std::wstring::npos) {
+            continue; // 空行
+        }
+        line = line.substr(start, end - start + 1);
+
+        // 添加到缓冲区
+        if (!sqlBuffer.empty()) {
+            sqlBuffer += L" ";
+        }
+        sqlBuffer += line;
+
+        // 检查特殊命令
+        QString currentInput = QString::fromStdWString(sqlBuffer).trimmed().toLower();
+        if (currentInput == "exit" || currentInput == "quit" ||
+            currentInput == "help" || currentInput == "clear" || currentInput == "cls") {
+
+            if (currentInput == "exit" || currentInput == "quit") {
+                std::wcout << L"再见!" << std::endl;
+                break;
+            } else if (currentInput == "help") {
+                std::wcout << L"支持的命令:\n";
+                std::wcout << L"  help              - 显示帮助\n";
+                std::wcout << L"  exit, quit        - 退出客户端\n";
+                std::wcout << L"  clear, cls        - 清屏\n";
+                std::wcout << L"  SQL语句;         - 执行SQL语句（以分号结尾）\n";
+            } else if (currentInput == "clear" || currentInput == "cls") {
+#ifdef _WIN32
+                system("cls");
+#else
+                system("clear");
+#endif
+            }
+
+            sqlBuffer.clear();
+            continue;
+        }
+
+        // 检查是否以分号结尾（SQL语句）
+        if (sqlBuffer.back() != L';') {
+            continue; // 继续读取多行SQL
+        }
+
+        // 转换为 QString
+        QString sql = QString::fromStdWString(sqlBuffer);
+        sqlBuffer.clear();
+
+        // 移除末尾的分号
+        sql = sql.trimmed();
+        if (sql.endsWith(';')) {
+            sql.chop(1);
+            sql = sql.trimmed();
+        }
+
+        if (sql.isEmpty()) {
+            continue;
+        }
+
+        // 这里应该实现网络协议通信
+        // 由于客户端实现比较复杂，这里先显示一个占位符消息
+        std::wcout << L"客户端模式正在开发中...\n";
+        std::wcout << L"SQL: " << sql.toStdWString() << L"\n";
+        std::wcout << L"当前需要服务器模式支持网络协议通信。\n" << std::endl;
+    }
+
+    socket.disconnectFromHost();
+    std::wcout << L"已断开与服务器的连接\n" << std::endl;
+    return 0;
+}
+
 void runInteractiveMode(qindb::Executor* executor, qindb::DatabaseManager* dbManager) {
     std::wstring line;
     std::wstring sqlBuffer;
@@ -411,166 +521,326 @@ int main(int argc, char *argv[])
     // 首先设置控制台
     setupConsole();
 
-    QCoreApplication app(argc, argv);
+    try {
+        QCoreApplication app(argc, argv);
 
-    // 加载配置文件（如果不存在则创建默认配置）
-    if (!QFile::exists("qindb.ini")) {
-        qindb::Config::createDefaultConfig("qindb.ini");
-        std::wcout << L"Created default configuration file: qindb.ini\n" << std::endl;
-    }
+        // 检查命令行参数
+        bool isServerMode = false;
+        bool isClientMode = false;
+        QString clientHost = "localhost";
+        uint16_t clientPort = 24678;
 
-    qindb::Config& config = qindb::Config::instance();
-    config.load("qindb.ini");
+        for (int i = 1; i < argc; i++) {
+            QString arg = QString::fromUtf8(argv[i]);
+            if (arg == "--server" || arg == "-s") {
+                isServerMode = true;
+            } else if (arg == "--client" || arg == "-c") {
+                isClientMode = true;
+            } else if (arg.startsWith("--host=") || arg.startsWith("-h=")) {
+                clientHost = arg.mid(arg.indexOf('=') + 1);
+            } else if (arg.startsWith("--port=") || arg.startsWith("-p=")) {
+                bool ok;
+                clientPort = arg.mid(arg.indexOf('=') + 1).toUInt(&ok);
+                if (!ok) clientPort = 24678;
+            } else if (arg == "--help" || arg == "-?") {
+                std::wcout << L"用法: qindb [选项]\n";
+                std::wcout << L"  --server, -s              以服务器模式启动\n";
+                std::wcout << L"  --client, -c              以客户端模式启动\n";
+                std::wcout << L"  --host=<主机>, -h=<主机>  客户端连接的主机地址\n";
+                std::wcout << L"  --port=<端口>, -p=<端口>  客户端连接的端口\n";
+                std::wcout << L"  --help, -?                显示帮助信息\n";
+                return 0;
+            }
+        }
 
-    // 初始化日志系统
-    qindb::Logger::instance().setLevel(qindb::LogLevel::INFO);
-    qindb::Logger::instance().enableConsole(config.isSystemLogConsoleEnabled());
-    qindb::Logger::instance().setLogFile(config.getSystemLogPath());
+        // 如果同时指定了服务器和客户端模式，优先使用服务器模式
+        if (isClientMode && isServerMode) {
+            isClientMode = false;
+        }
 
-    printBanner();
+        // 如果是客户端模式，启动客户端
+        if (isClientMode) {
+            return runClientMode(clientHost, clientPort);
+        }
 
-    if (!config.isVerboseOutput()) {
-        std::wcout << L"在简单模式下运行.\n";
-        std::wcout << L"编辑qindb.ini，设置VerboseOutput=true来获取详细分析.\n" << std::endl;
-    }
+        // 加载配置文件（如果不存在则创建默认配置）
+        if (!QFile::exists("qindb.ini")) {
+            qindb::Config::createDefaultConfig("qindb.ini");
+            std::wcout << L"Created default configuration file: qindb.ini\n" << std::endl;
+        }
 
-    LOG_INFO("qinDB Database System Starting...");
-    LOG_INFO(QString("Verbose output: %1").arg(config.isVerboseOutput() ? "enabled" : "disabled"));
-    LOG_INFO(QString("Analysis log: %1").arg(config.isAnalysisLogEnabled() ? "enabled" : "disabled"));
+        qindb::Config& config = qindb::Config::instance();
+        config.load("qindb.ini");
 
-    // 初始化DatabaseManager
-    LOG_INFO("Initializing database manager");
-    qindb::DatabaseManager databaseManager(config.getDefaultDbPath());
-    
-    // 从磁盘加载数据库管理器状态
-    if (!databaseManager.loadFromDisk()) {
-        LOG_INFO("Starting with empty database manager");
-    } else {
-        LOG_INFO("Loaded existing database manager state");
-    }
+        // 初始化日志系统
+        qindb::Logger::instance().setLevel(qindb::LogLevel::INFO);
+        qindb::Logger::instance().enableConsole(config.isSystemLogConsoleEnabled());
+        qindb::Logger::instance().setLogFile(config.getSystemLogPath());
 
-    // 初始化Executor
-    qindb::Executor executor(&databaseManager);
+        printBanner();
 
-    LOG_INFO("Query executor initialized");
+        if (!config.isVerboseOutput()) {
+            std::wcout << L"在简单模式下运行.\n";
+            std::wcout << L"编辑qindb.ini，设置VerboseOutput=true来获取详细分析.\n" << std::endl;
+        }
 
-    // 初始化认证管理器（使用系统数据库 qindb）
-    LOG_INFO("Initializing authentication system...");
+        LOG_INFO("qinDB Database System Starting...");
+        LOG_INFO(QString("Verbose output: %1").arg(config.isVerboseOutput() ? "enabled" : "disabled"));
+        LOG_INFO(QString("Analysis log: %1").arg(config.isAnalysisLogEnabled() ? "enabled" : "disabled"));
 
-    // 保存当前数据库名
-    QString previousDatabase = databaseManager.currentDatabaseName();
+        std::wcout << L"系统启动检查中...\n" << std::endl;
 
-    // 确保系统数据库 qindb 存在
-    if (!databaseManager.databaseExists("qindb")) {
-        LOG_INFO("Creating system database 'qindb'");
-        if (!databaseManager.createDatabase("qindb")) {
-            LOG_ERROR("Failed to create system database 'qindb'");
+        // 检查配置文件是否有效
+        try {
+            if (!config.load("qindb.ini")) {
+                std::wcout << L"✗ 配置文件加载失败\n" << std::endl;
+                return 1;
+            }
+        } catch (const std::exception& e) {
+            std::wcout << L"✗ 配置文件加载异常: " << QString::fromUtf8(e.what()).toStdWString() << L"\n" << std::endl;
+            return 1;
+        } catch (...) {
+            std::wcout << L"✗ 配置文件加载发生未知异常\n" << std::endl;
             return 1;
         }
+
+        std::wcout << L"✓ 系统启动检查完成\n" << std::endl;
+
+        // 初始化DatabaseManager
+        LOG_INFO("Initializing database manager");
+        std::wcout << L"正在初始化数据库管理器...\n" << std::endl;
+
+        qindb::DatabaseManager databaseManager(config.getDefaultDbPath());
+
+        // 添加异常处理
+        try {
+            // 从磁盘加载数据库管理器状态
+            if (!databaseManager.loadFromDisk()) {
+                LOG_INFO("Starting with empty database manager");
+                std::wcout << L"✓ 使用空数据库管理器启动\n" << std::endl;
+            } else {
+                LOG_INFO("Loaded existing database manager state");
+                std::wcout << L"✓ 已加载现有数据库管理器状态\n" << std::endl;
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR(QString("Exception during database manager initialization: %1").arg(e.what()));
+            std::wcout << L"✗ 数据库管理器初始化异常: " << QString::fromUtf8(e.what()).toStdWString() << L"\n" << std::endl;
+            return 1;
+        } catch (...) {
+            LOG_ERROR("Unknown exception during database manager initialization");
+            std::wcout << L"✗ 数据库管理器初始化发生未知异常\n" << std::endl;
+            return 1;
+        }
+
+        // 初始化Executor
+        qindb::Executor executor(&databaseManager);
+
+        try {
+            LOG_INFO("Query executor initialized");
+            std::wcout << L"✓ 查询执行器初始化成功\n" << std::endl;
+        } catch (const std::exception& e) {
+            LOG_ERROR(QString("Exception during executor initialization: %1").arg(e.what()));
+            std::wcout << L"✗ 查询执行器初始化异常: " << QString::fromUtf8(e.what()).toStdWString() << L"\n" << std::endl;
+            return 1;
+        } catch (...) {
+            LOG_ERROR("Unknown exception during executor initialization");
+            std::wcout << L"✗ 查询执行器初始化发生未知异常\n" << std::endl;
+            return 1;
+        }
+
+        // 初始化认证管理器（使用系统数据库 qindb）
+        LOG_INFO("Initializing authentication system...");
+
+        // 保存当前数据库名
+        QString previousDatabase = databaseManager.currentDatabaseName();
+
+        // 确保系统数据库 qindb 存在且有效
+    bool needCreateSystemDB = false;
+    if (!databaseManager.databaseExists("qindb")) {
+        LOG_INFO("System database 'qindb' does not exist, will create a new one");
+        needCreateSystemDB = true;
+    } else {
+        LOG_INFO("System database 'qindb' exists, checking integrity...");
+
+        // 尝试切换到系统数据库并检查组件
+        if (!databaseManager.useDatabase("qindb")) {
+            LOG_WARN("Failed to switch to existing system database, will recreate it");
+            needCreateSystemDB = true;
+        } else {
+            // 检查系统数据库组件是否完整
+            qindb::Catalog* testCatalog = databaseManager.getCurrentCatalog();
+            qindb::BufferPoolManager* testBufferPool = databaseManager.getCurrentBufferPool();
+            qindb::DiskManager* testDiskManager = databaseManager.getCurrentDiskManager();
+
+            if (!testCatalog || !testBufferPool || !testDiskManager) {
+                LOG_WARN("System database components are incomplete, will recreate it");
+                needCreateSystemDB = true;
+            }
+        }
     }
 
-    // 切换到系统数据库
+    if (needCreateSystemDB) {
+        // 如果需要创建新系统数据库，先删除旧的（如果存在）
+        if (databaseManager.databaseExists("qindb")) {
+            LOG_INFO("Removing corrupted system database 'qindb'");
+            if (!databaseManager.dropDatabase("qindb")) {
+                LOG_ERROR("Failed to remove corrupted system database");
+                std::wcout << L"✗ 无法删除损坏的系统数据库\n" << std::endl;
+                return 1;
+            }
+        }
+
+        // 创建新的系统数据库
+        LOG_INFO("Creating new system database 'qindb'");
+        if (!databaseManager.createDatabase("qindb")) {
+            LOG_ERROR("Failed to create system database 'qindb'");
+            std::wcout << L"✗ 创建系统数据库失败。请检查磁盘空间和权限。\n" << std::endl;
+            return 1;
+        }
+        LOG_INFO("System database 'qindb' created successfully");
+    } else {
+        LOG_INFO("System database 'qindb' is valid and ready to use");
+    }
+
+    // 确保切换到系统数据库
     if (!databaseManager.useDatabase("qindb")) {
         LOG_ERROR("Failed to switch to system database 'qindb'");
+        std::wcout << L"✗ 切换到系统数据库失败。数据库可能已损坏。\n" << std::endl;
         return 1;
     }
+    LOG_INFO("Switched to system database 'qindb' successfully");
 
-    // 获取系统数据库的组件（当前数据库）
-    qindb::Catalog* systemCatalog = databaseManager.getCurrentCatalog();
-    qindb::BufferPoolManager* systemBufferPool = databaseManager.getCurrentBufferPool();
-    qindb::DiskManager* systemDiskManager = databaseManager.getCurrentDiskManager();
+        // 获取系统数据库的组件（当前数据库）
+        qindb::Catalog* systemCatalog = databaseManager.getCurrentCatalog();
+        qindb::BufferPoolManager* systemBufferPool = databaseManager.getCurrentBufferPool();
+        qindb::DiskManager* systemDiskManager = databaseManager.getCurrentDiskManager();
 
-    if (!systemCatalog || !systemBufferPool || !systemDiskManager) {
-        LOG_ERROR("Failed to get system database components");
-        return 1;
-    }
-
-    // 创建认证管理器
-    qindb::AuthManager authManager(systemCatalog, systemBufferPool, systemDiskManager);
-
-    // 初始化用户系统表
-    if (!authManager.initializeUserSystem()) {
-        LOG_ERROR("Failed to initialize user authentication system");
-        return 1;
-    }
-
-    LOG_INFO("Authentication system initialized successfully");
-
-    // 将AuthManager设置到Executor
-    executor.setAuthManager(&authManager);
-    executor.setPermissionManager(databaseManager.getCurrentPermissionManager());
-    executor.setCurrentUser("admin");
-    LOG_INFO("AuthManager linked to executor");
-
-    // 切换回之前的数据库
-    if (!previousDatabase.isEmpty() && previousDatabase != "qindb") {
-        if (databaseManager.databaseExists(previousDatabase)) {
-            databaseManager.useDatabase(previousDatabase);
+        if (!systemCatalog || !systemBufferPool || !systemDiskManager) {
+            LOG_ERROR("Failed to get system database components");
+            std::wcout << L"✗ 无法获取系统数据库组件\n" << std::endl;
+            return 1;
         }
-    }
 
-    // 启动网络服务器（如果在配置中启用）
-    qindb::Server* server = nullptr;
-    if (config.isNetworkEnabled()) {
-        LOG_INFO("Network server enabled in configuration");
+        // 创建认证管理器
+        qindb::AuthManager* authManager = nullptr;
+        try {
+            authManager = new qindb::AuthManager(systemCatalog, systemBufferPool, systemDiskManager);
 
-        server = new qindb::Server(&databaseManager, &authManager);
+            // 初始化用户系统表
+            if (!authManager->initializeUserSystem()) {
+                LOG_ERROR("Failed to initialize user authentication system");
+                std::wcout << L"✗ 用户认证系统初始化失败\n" << std::endl;
+                delete authManager;
+                return 1;
+            }
 
-        QString address = config.getServerAddress();
-        uint16_t port = config.getServerPort();
+            LOG_INFO("Authentication system initialized successfully");
+            std::wcout << L"✓ 用户认证系统初始化成功\n" << std::endl;
 
-        if (server->start(address, port)) {
-            LOG_INFO(QString("Network server started on %1:%2").arg(address).arg(port));
-            std::wcout << L"✓ 网络服务器启动成功: " << address.toStdWString()
-                      << L":" << port << L"\n" << std::endl;
+            // 将AuthManager设置到Executor
+            executor.setAuthManager(authManager);
+            executor.setPermissionManager(databaseManager.getCurrentPermissionManager());
+            executor.setCurrentUser("admin");
+            LOG_INFO("AuthManager linked to executor");
+            std::wcout << L"✓ 认证管理器已连接到执行器\n" << std::endl;
+        } catch (const std::exception& e) {
+            LOG_ERROR(QString("Exception during auth manager initialization: %1").arg(e.what()));
+            std::wcout << L"✗ 认证管理器初始化异常: " << QString::fromUtf8(e.what()).toStdWString() << L"\n" << std::endl;
+            delete authManager;
+            return 1;
+        } catch (...) {
+            LOG_ERROR("Unknown exception during auth manager initialization");
+            std::wcout << L"✗ 认证管理器初始化发生未知异常\n" << std::endl;
+            delete authManager;
+            return 1;
+        }
+
+        // 切换回之前的数据库
+        if (!previousDatabase.isEmpty() && previousDatabase != "qindb") {
+            if (databaseManager.databaseExists(previousDatabase)) {
+                databaseManager.useDatabase(previousDatabase);
+            }
+        }
+
+        // 启动网络服务器（如果在配置中启用或指定了服务器模式）
+        qindb::Server* server = nullptr;
+        bool shouldStartServer = config.isNetworkEnabled() || isServerMode;
+
+        if (shouldStartServer) {
+            LOG_INFO("Network server enabled in configuration or command line");
+            std::wcout << L"✓ 网络服务器模式已启用\n" << std::endl;
+
+            server = new qindb::Server(&databaseManager, authManager);
+
+            QString address = config.getServerAddress();
+            uint16_t port = config.getServerPort();
+
+            if (server->start(address, port)) {
+                LOG_INFO(QString("Network server started on %1:%2").arg(address).arg(port));
+                std::wcout << L"✓ 网络服务器启动成功: " << address.toStdWString()
+                          << L":" << port << L"\n" << std::endl;
+            } else {
+                LOG_ERROR("Failed to start network server");
+                std::wcout << L"✗ 网络服务器启动失败\n" << std::endl;
+                delete server;
+                server = nullptr;
+            }
         } else {
-            LOG_ERROR("Failed to start network server");
-            std::wcout << L"✗ 网络服务器启动失败\n" << std::endl;
-            delete server;
-            server = nullptr;
+            LOG_INFO("Network server is disabled");
+            std::wcout << L"提示: 网络服务器未启用。使用 --server 参数或在 qindb.ini 中设置 Network/Enabled=true 来启用。\n" << std::endl;
         }
-    } else {
-        LOG_INFO("Network server is disabled in configuration");
-        std::wcout << L"提示: 网络服务器未启用。在 qindb.ini 中设置 Network/Enabled=true 来启用。\n" << std::endl;
-    }
 
-    // 如果网络服务器启动成功,可以选择使用Qt事件循环(非交互模式)或交互式CLI
-    bool useInteractiveMode = true;  // 默认使用交互模式(可以从命令行参数或配置文件读取)
+        // 确定运行模式
+        bool useInteractiveMode = true;  // 默认使用交互模式
 
-    if (server && !useInteractiveMode) {
-        // 使用Qt事件循环保持服务器运行
-        LOG_INFO("Running in server-only mode with Qt event loop");
-        std::wcout << L"\n服务器正在运行...\n按 Ctrl+C 退出.\n" << std::endl;
+        // 如果指定了服务器模式且没有客户端连接，则使用Qt事件循环
+        if (isServerMode && !server) {
+            useInteractiveMode = false;  // 无法启动服务器，退出
+        }
 
-        int exitCode = app.exec();
+        if (server && !useInteractiveMode) {
+            // 使用Qt事件循环保持服务器运行
+            LOG_INFO("Running in server-only mode with Qt event loop");
+            std::wcout << L"\n服务器正在运行...\n按 Ctrl+C 退出.\n" << std::endl;
 
-        // 清理网络服务器
-        LOG_INFO("Stopping network server");
-        server->stop();
-        delete server;
+            int exitCode = app.exec();
 
-        return exitCode;
-    } else {
-        // 进入交互式模式(同时网络服务器在后台运行)
-        LOG_INFO("Entering interactive mode");
-        runInteractiveMode(&executor, &databaseManager);
-
-        // 清理网络服务器
-        if (server) {
+            // 清理网络服务器
             LOG_INFO("Stopping network server");
             server->stop();
             delete server;
+
+            return exitCode;
+        } else {
+            // 进入交互式模式(同时网络服务器在后台运行)
+            LOG_INFO("Entering interactive mode");
+            runInteractiveMode(&executor, &databaseManager);
+
+            // 清理网络服务器
+            if (server) {
+                LOG_INFO("Stopping network server");
+                server->stop();
+                delete server;
+            }
         }
+
+        // 保存数据库管理器状态
+        if (!databaseManager.saveToDisk()) {
+            LOG_ERROR("Failed to save database manager state");
+        } else {
+            LOG_INFO("Database manager state saved successfully");
+        }
+
+        LOG_INFO("qinDB Database System Shutting down");
+
+        return 0;
+    } catch (const std::exception& e) {
+        LOG_ERROR(QString("Critical exception in main: %1").arg(e.what()));
+        std::wcout << L"✗ 程序运行时发生严重异常: " << QString::fromUtf8(e.what()).toStdWString() << L"\n" << std::endl;
+        return 1;
+    } catch (...) {
+        LOG_ERROR("Unknown critical exception in main");
+        std::wcout << L"✗ 程序运行时发生未知严重异常\n" << std::endl;
+        return 1;
     }
-
-    // 保存数据库管理器状态
-    if (!databaseManager.saveToDisk()) {
-        LOG_ERROR("Failed to save database manager state");
-    } else {
-        LOG_INFO("Database manager state saved successfully");
-    }
-
-    LOG_INFO("qinDB Database System Shutting down");
-
-    return 0;
 }
