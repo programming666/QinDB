@@ -9,7 +9,7 @@ int main(int argc, char *argv[]) {
     QCoreApplication app(argc, argv);
 
     std::cout << "qinDB Performance Benchmark Suite" << std::endl;
-    std::cout << "==================================\n" << std::endl;
+    std::wcout << L"==================================\n" << std::endl;
 
     // 注册性能测试
     BPlusTreeBenchmark bptreeBench;

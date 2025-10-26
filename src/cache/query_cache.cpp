@@ -24,11 +24,11 @@ QueryCache::QueryCache(uint64_t maxEntries, uint64_t maxMemoryMB, uint64_t ttlSe
 QueryCache::~QueryCache() {
     QMutexLocker locker(&mutex_);
     Statistics stats = getStatistics();
-    LOG_INFO(QString("QueryCache destroyed: entries=%1, hits=%2, misses=%3, hitRate=%.2f%%")
+    LOG_INFO(QString("QueryCache destroyed: entries=%1, hits=%2, misses=%3, hitRate=%4%%")
                 .arg(stats.totalEntries)
                 .arg(stats.totalHits)
                 .arg(stats.totalMisses)
-                .arg(stats.hitRate * 100.0));
+                .arg(stats.hitRate * 100.0, 0, 'f', 2));
 }
 
 bool QueryCache::get(const QString& querySql, QueryResult& result) {

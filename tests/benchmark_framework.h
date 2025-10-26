@@ -163,9 +163,9 @@ private:
     void printResults(Benchmark* benchmark) {
         const auto& results = benchmark->getResults();
 
-        std::cout << "\n----------------------------------------" << std::endl;
+        std::wcout << L"\n----------------------------------------" << std::endl;
         std::cout << "Benchmark Results: " << benchmark->getName().toStdString() << std::endl;
-        std::cout << "----------------------------------------" << std::endl;
+        std::wcout << L"----------------------------------------" << std::endl;
 
         for (const auto& result : results) {
             std::cout << "\n[" << result.name.toStdString() << "]" << std::endl;
@@ -193,11 +193,11 @@ private:
     }
 
     void printSummary() {
-        std::cout << "\n╔════════════════════════════════════════════════════════╗" << std::endl;
-        std::cout << "║               Benchmark Summary                    ║" << std::endl;
-        std::cout << "╚════════════════════════════════════════════════════════╝" << std::endl;
-        std::cout << "Total Benchmarks Run: " << benchmarks_.size() << std::endl;
-        std::cout << "════════════════════════════════════════════════════════\n" << std::endl;
+        std::wcout << L"\n╔════════════════════════════════════════════════════════╗" << std::endl;
+        std::wcout << L"║               Benchmark Summary                    ║" << std::endl;
+        std::wcout << L"╚════════════════════════════════════════════════════════╝" << std::endl;
+        std::wcout << L"Total Benchmarks Run: " << benchmarks_.size() << std::endl;
+        std::wcout << L"════════════════════════════════════════════════════════\n" << std::endl;
     }
 
     QVector<Benchmark*> benchmarks_;

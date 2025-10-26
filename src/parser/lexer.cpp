@@ -119,6 +119,8 @@ static QHash<QString, TokenType> createKeywordMap() {
     map["match"] = TokenType::MATCH;
     map["against"] = TokenType::AGAINST;
     map["auto_increment"] = TokenType::AUTO_INCREMENT;
+    map["outfile"] = TokenType::OUTFILE;
+    map["format"] = TokenType::FORMAT;
     return map;
 }
 

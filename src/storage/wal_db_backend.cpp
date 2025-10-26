@@ -37,6 +37,13 @@ bool WalDbBackend::initialize() {
 
 bool WalDbBackend::systemTablesExist() {
     // 检查页面4和5（预留给WAL系统表）
+    // 首先检查磁盘管理器中是否有足够的页面
+    if (diskManager_->getNumPages() < 5) {
+        // 页面4和5还不存在
+        return false;
+    }
+
+    // 尝试获取页面4并检查其类型
     Page* page = bufferPool_->fetchPage(4);
     if (!page) {
         return false;
@@ -51,14 +58,11 @@ bool WalDbBackend::systemTablesExist() {
 bool WalDbBackend::createSystemTables() {
     LOG_INFO("Creating system tables for WAL storage");
 
-    // 创建sys_wal_logs表的第一个页面（页面ID=4）
+    // 创建sys_wal_logs表的第一个页面
     PageId sysWalLogsPageId = INVALID_PAGE_ID;
     Page* sysWalLogsPage = bufferPool_->newPage(&sysWalLogsPageId);
-    if (!sysWalLogsPage || sysWalLogsPageId != 4) {
+    if (!sysWalLogsPage) {
         LOG_ERROR("Failed to create sys_wal_logs page");
-        if (sysWalLogsPage) {
-            bufferPool_->unpinPage(sysWalLogsPageId, false);
-        }
         return false;
     }
     sysWalLogsPage->setPageType(PageType::TABLE_PAGE);
@@ -66,14 +70,11 @@ bool WalDbBackend::createSystemTables() {
     sysWalLogsFirstPage_ = sysWalLogsPageId;
     bufferPool_->unpinPage(sysWalLogsPageId, true);
 
-    // 创建sys_wal_meta表的第一个页面（页面ID=5）
+    // 创建sys_wal_meta表的第一个页面
     PageId sysWalMetaPageId = INVALID_PAGE_ID;
     Page* sysWalMetaPage = bufferPool_->newPage(&sysWalMetaPageId);
-    if (!sysWalMetaPage || sysWalMetaPageId != 5) {
+    if (!sysWalMetaPage) {
         LOG_ERROR("Failed to create sys_wal_meta page");
-        if (sysWalMetaPage) {
-            bufferPool_->unpinPage(sysWalMetaPageId, false);
-        }
         return false;
     }
     sysWalMetaPage->setPageType(PageType::TABLE_PAGE);
@@ -95,10 +96,10 @@ bool WalDbBackend::createSystemTables() {
 }
 
 bool WalDbBackend::writeRecord(const WALRecord& record) {
-    // 确保系统表页面ID已设置
+    // 确保系统表已初始化
     if (sysWalLogsFirstPage_ == INVALID_PAGE_ID) {
-        sysWalLogsFirstPage_ = 4;
-        sysWalMetaFirstPage_ = 5;
+        LOG_ERROR("WAL system tables not initialized");
+        return false;
     }
 
     // 序列化WAL记录
@@ -137,10 +138,10 @@ bool WalDbBackend::writeRecord(const WALRecord& record) {
 }
 
 bool WalDbBackend::readAllRecords(QVector<WALRecord>& records) {
-    // 确保系统表页面ID已设置
+    // 确保系统表已初始化
     if (sysWalLogsFirstPage_ == INVALID_PAGE_ID) {
-        sysWalLogsFirstPage_ = 4;
-        sysWalMetaFirstPage_ = 5;
+        LOG_ERROR("WAL system tables not initialized");
+        return false;
     }
 
     records.clear();
@@ -209,19 +210,20 @@ bool WalDbBackend::flush() {
 bool WalDbBackend::truncate() {
     LOG_INFO("Truncating WAL logs");
 
-    // 确保系统表页面ID已设置
+    // 确保系统表已初始化
     if (sysWalLogsFirstPage_ == INVALID_PAGE_ID) {
-        sysWalLogsFirstPage_ = 4;
-        sysWalMetaFirstPage_ = 5;
+        LOG_ERROR("WAL system tables not initialized");
+        return false;
     }
 
     return clearWalLogs();
 }
 
 bool WalDbBackend::getMetaValue(const QString& key, uint64_t& value) {
-    // 确保系统表页面ID已设置
+    // 确保系统表已初始化
     if (sysWalMetaFirstPage_ == INVALID_PAGE_ID) {
-        sysWalMetaFirstPage_ = 5;
+        LOG_ERROR("WAL system tables not initialized");
+        return false;
     }
 
     Page* page = bufferPool_->fetchPage(sysWalMetaFirstPage_);
@@ -264,9 +266,10 @@ bool WalDbBackend::getMetaValue(const QString& key, uint64_t& value) {
 }
 
 bool WalDbBackend::setMetaValue(const QString& key, uint64_t value) {
-    // 确保系统表页面ID已设置
+    // 确保系统表已初始化
     if (sysWalMetaFirstPage_ == INVALID_PAGE_ID) {
-        sysWalMetaFirstPage_ = 5;
+        LOG_ERROR("WAL system tables not initialized");
+        return false;
     }
 
     Page* page = bufferPool_->fetchPage(sysWalMetaFirstPage_);

@@ -356,7 +356,7 @@ bool GenericBPlusTree::insertIntoLeaf(PageId leafPageId, const QByteArray& seria
         return rootPageId_ != INVALID_PAGE_ID;
     } else {
         // 插入到父节点
-        return insertIntoParent(parentPageId, middleKey, leafPageId, newLeafPageId);
+        return insertIntoParent(parentPageId, middleKey, /*leafPageId, */ newLeafPageId);
     }
 }
 
@@ -577,7 +577,7 @@ PageId GenericBPlusTree::createNewRoot(PageId leftPageId, const QByteArray& key,
 }
 
 bool GenericBPlusTree::insertIntoParent(PageId parentPageId, const QByteArray& key,
-                                       PageId leftPageId, PageId rightPageId) {
+                                       /*PageId leftPageId, */ PageId rightPageId) {
     Page* page = bufferPoolManager_->fetchPage(parentPageId);
     if (!page) {
         return false;
@@ -648,7 +648,7 @@ bool GenericBPlusTree::insertIntoParent(PageId parentPageId, const QByteArray& k
         return rootPageId_ != INVALID_PAGE_ID;
     } else {
         // 递归插入到祖父节点
-        return insertIntoParent(grandParentPageId, middleKey, parentPageId, newInternalPageId);
+        return insertIntoParent(grandParentPageId, middleKey, /*parentPageId, */ newInternalPageId);
     }
 }
 
@@ -1241,7 +1241,7 @@ bool GenericBPlusTree::borrowFromRightSiblingLeaf(PageId nodePageId, PageId righ
 }
 
 bool GenericBPlusTree::mergeWithLeftSiblingLeaf(PageId nodePageId, PageId leftSiblingPageId,
-                                                PageId parentPageId, int keyIndexInParent) {
+                                                PageId parentPageId) {
     // 读取左兄弟
     Page* leftPage = bufferPoolManager_->fetchPage(leftSiblingPageId);
     if (!leftPage) {
@@ -1255,7 +1255,6 @@ bool GenericBPlusTree::mergeWithLeftSiblingLeaf(PageId nodePageId, PageId leftSi
     }
 
     BPlusTreePageHeader* leftHeader = reinterpret_cast<BPlusTreePageHeader*>(leftPage->getData());
-    PageId leftNext = leftHeader->nextPageId;
     bufferPoolManager_->unpinPage(leftSiblingPageId, false);
 
     // 读取当前节点
@@ -1313,7 +1312,7 @@ bool GenericBPlusTree::mergeWithLeftSiblingLeaf(PageId nodePageId, PageId leftSi
 }
 
 bool GenericBPlusTree::mergeWithRightSiblingLeaf(PageId nodePageId, PageId rightSiblingPageId,
-                                                 PageId parentPageId, int keyIndexInParent) {
+                                                 PageId parentPageId) {
     // 简单实现：将右兄弟合并到当前节点
     // 读取当前节点
     Page* nodePage = bufferPoolManager_->fetchPage(nodePageId);
@@ -1444,7 +1443,7 @@ bool GenericBPlusTree::handleUnderflow(PageId nodePageId, PageId parentPageId) {
 
     // 无法借用，进行合并
     if (leftSiblingPageId != INVALID_PAGE_ID) {
-        if (mergeWithLeftSiblingLeaf(nodePageId, leftSiblingPageId, parentPageId, keyIndexInParent)) {
+        if (mergeWithLeftSiblingLeaf(nodePageId, leftSiblingPageId, parentPageId)) {
             // 检查父节点是否下溢
             Page* parentPage = bufferPoolManager_->fetchPage(parentPageId);
             if (parentPage) {
@@ -1460,7 +1459,7 @@ bool GenericBPlusTree::handleUnderflow(PageId nodePageId, PageId parentPageId) {
             return true;
         }
     } else if (rightSiblingPageId != INVALID_PAGE_ID) {
-        if (mergeWithRightSiblingLeaf(nodePageId, rightSiblingPageId, parentPageId, keyIndexInParent)) {
+        if (mergeWithRightSiblingLeaf(nodePageId, rightSiblingPageId, parentPageId)) {
             // 检查父节点是否下溢
             Page* parentPage = bufferPoolManager_->fetchPage(parentPageId);
             if (parentPage) {

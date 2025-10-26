@@ -1,0 +1,9 @@
+{
+    "current_database": "testdb",
+    "databases": [
+        {
+            "name": "testdb",
+            "path": "test_executor_db/testdb"
+        }
+    ]
+}

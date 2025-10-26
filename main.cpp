@@ -59,7 +59,6 @@ void showHelp() {
   help              - 显示帮助信息
   exit, quit        - 退出qinDB
   clear             - 清屏
-  status            - 显示系统状态
 
 数据库管理 命令:
   CREATE DATABASE <name>           - 创建数据库
@@ -98,54 +97,6 @@ void showHelp() {
 注意:
   - 所有 SQL 语句必须以分号(;)结尾
   - 索引查询自动优化 WHERE 子句中的等值条件
-)" << std::endl;
-}
-
-void showStatus() {
-    using namespace qindb;
-    const Config& config = Config::instance();
-
-    std::wcout << LR"(
-qinDB 状态:
-  版本:           1.0.0
-  构建:             Debug
-  架构:      x86_64
-
-配置:
-  详细的日志输出:    )" << (config.isVerboseOutput() ? L"enabled" : L"disabled") << L"\n";
-    std::wcout << L"  分析日志输出:      " << (config.isAnalysisLogEnabled() ? L"enabled" : L"disabled") << L"\n";
-    if (config.isAnalysisLogEnabled()) {
-        std::wcout << L"  分析日志保存路径: " << config.getAnalysisLogPath().toStdWString() << L"\n";
-    }
-    std::wcout << LR"(
-完成状态:
-  ✓ Lexer              - 完成
-  ✓ Parser             - 完成
-  ✓ AST抽象语法树       - 完成
-  ✓ 日志系统            - 完成
-  ✓ 配置系统            - 完成
-  ✓ 页面管理器          - 完成
-  ✓ 磁盘管理器          - 完成
-  ✓ 缓冲池              - 完成 (LRU/时钟算法)
-  ✓ 表达式求值器        - 完成
-  ✓ 多数据库支持        - 完成
-  ✓ WHERE子句          - 完成
-  ✓ JOIN操作           - 完成 (NestedLoopJoin)
-  ✓ GROUP BY/HAVING    - 完成
-  ✓ ORDER BY/LIMIT     - 完成
-  ✓ UPDATE/DELETE      - 完成 (含索引维护)
-  ✓ B+树通用索引        - 完成 (支持60+种数据类型)
-  ✓ 索引自动优化        - 完成 (WHERE等值条件)
-  ✓ 事务管理            - 部分完成 (WAL, 基础MVCC)
-  ⧗ 查询优化器          - 未完成
-  ⧗ 网络层              - 未完成
-
-索引特性:
-  • 支持的数据类型: 60+ SQL标准类型
-  • 自动索引优化: WHERE col = value
-  • 索引操作: CREATE INDEX, DROP INDEX
-  • INSERT/UPDATE/DELETE 自动维护索引
-  • 可变长键: 支持VARCHAR, TEXT等类型
 )" << std::endl;
 }
 
@@ -393,7 +344,7 @@ void runInteractiveMode(qindb::Executor* executor, qindb::DatabaseManager* dbMan
         // 检查是否是特殊命令（不需要分号）
         QString currentInput = QString::fromStdWString(sqlBuffer).trimmed().toLower();
         if (currentInput == "exit" || currentInput == "quit" ||
-            currentInput == "help" || currentInput == "status" ||
+            currentInput == "help" ||
             currentInput == "clear" || currentInput == "cls" ||
             currentInput == "show tables") {
 
@@ -403,8 +354,6 @@ void runInteractiveMode(qindb::Executor* executor, qindb::DatabaseManager* dbMan
                 break;
             } else if (currentInput == "help") {
                 showHelp();
-            } else if (currentInput == "status") {
-                showStatus();
             } else if (currentInput == "clear" || currentInput == "cls") {
 #ifdef _WIN32
                 system("cls");

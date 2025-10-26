@@ -230,6 +230,10 @@ public:
     std::vector<OrderByItem> orderBy;
     int limit = -1;
     int offset = -1;
+
+    // 导出选项
+    QString exportFilePath;      // INTO OUTFILE 路径
+    QString exportFormat;        // FORMAT (JSON/CSV/XML)
 };
 
 // INSERT 语句

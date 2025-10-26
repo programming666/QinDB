@@ -16,7 +16,7 @@ using namespace qindb::test;
 int main(int argc, char *argv[]) {
     QCoreApplication app(argc, argv);
 
-    std::cout << "========== B+ Tree Large Dataset Debug Test ==========" << std::endl;
+    std::wcout << L"========== B+ Tree Large Dataset Debug Test ==========" << std::endl;
 
     // 创建临时数据库文件
     QTemporaryFile tempFile;
@@ -74,15 +74,15 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    std::cout << "\n========== Test Summary ==========" << std::endl;
-    std::cout << "Total keys inserted: " << (COUNT - failedInserts) << "/" << COUNT << std::endl;
-    std::cout << "Failed searches: " << failedSearches << "/100" << std::endl;
+    std::wcout << L"\n========== Test Summary ==========" << std::endl;
+    std::wcout << L"Total keys inserted: " << (COUNT - failedInserts) << "/" << COUNT << std::endl;
+    std::wcout << L"Failed searches: " << failedSearches << "/100" << std::endl;
 
     if (failedSearches == 0) {
-        std::cout << "\n✓ ALL TESTS PASSED!" << std::endl;
+        std::wcout << L"\n✓ ALL TESTS PASSED!" << std::endl;
         return 0;
     } else {
-        std::cout << "\n✗ SOME TESTS FAILED!" << std::endl;
+        std::wcout << L"\n✗ SOME TESTS FAILED!" << std::endl;
         return 1;
     }
 }

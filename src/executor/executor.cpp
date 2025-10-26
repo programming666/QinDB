@@ -14,6 +14,7 @@
 #include "qindb/cost_optimizer.h"
 #include "qindb/permission_manager.h"
 #include "qindb/query_cache.h"
+#include "qindb/result_exporter.h"
 #include <algorithm>
 
 namespace qindb {
@@ -1138,6 +1139,40 @@ QueryResult Executor::executeSelect(const SelectStatement* stmt) {
         // 存储到缓存
         if (queryCache_->put(querySql, result, affectedTables)) {
             LOG_DEBUG(QString("Query cached: %1").arg(querySql.left(60)));
+        }
+    }
+
+    // 处理导出（INTO OUTFILE）
+    if (!actualStmt->exportFilePath.isEmpty() && result.success) {
+        ExportFormat format;
+        if (actualStmt->exportFormat == "JSON") {
+            format = ExportFormat::JSON;
+        } else if (actualStmt->exportFormat == "XML") {
+            format = ExportFormat::XML;
+        } else {
+            format = ExportFormat::CSV;  // 默认
+        }
+
+        LOG_INFO(QString("Exporting result to file: %1 (format: %2)")
+                .arg(actualStmt->exportFilePath)
+                .arg(actualStmt->exportFormat));
+
+        bool exportSuccess = ResultExporter::exportToFile(result, format, actualStmt->exportFilePath);
+
+        if (exportSuccess) {
+            result.message += QString("\nResult exported to '%1' (format: %2, %3 rows)")
+                .arg(actualStmt->exportFilePath)
+                .arg(actualStmt->exportFormat)
+                .arg(result.rows.size());
+            LOG_INFO(QString("Export successful: %1 rows written to %2")
+                    .arg(result.rows.size())
+                    .arg(actualStmt->exportFilePath));
+        } else {
+            result.success = false;
+            QString errorMsg = QString("Failed to export result to file: %1")
+                .arg(actualStmt->exportFilePath);
+            result.error = Error(ErrorCode::IO_ERROR, errorMsg);
+            LOG_ERROR(QString("Export failed: %1").arg(errorMsg));
         }
     }
 

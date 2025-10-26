@@ -131,7 +131,7 @@ bool PermissionManager::revokePermission(const QString& username,
 
             if (recUser == username && recDb == databaseName &&
                 recTable == tableName && recPrivilege == targetPrivilege) {
-                if (TablePage::deleteRecord(page, slot, INVALID_TXN_ID)) {
+                if (TablePage::deleteRecord(page, slot, 1)) {
                     removed = true;
                 }
             }
@@ -182,7 +182,7 @@ bool PermissionManager::revokeAllPermissions(const QString& username) {
             }
 
             if (record[1].toString() == username) {
-                if (TablePage::deleteRecord(page, slot, INVALID_TXN_ID)) {
+                if (TablePage::deleteRecord(page, slot, 1)) {
                     removed = true;
                 }
             }
@@ -530,10 +530,17 @@ std::optional<Permission> PermissionManager::findPermission(const QString& usern
         }
 
         QVector<QVector<QVariant>> records;
-        TablePage::getAllRecords(page, tableDef, records);
+        QVector<RecordHeader> headers;
+        TablePage::getAllRecords(page, tableDef, records, headers);
 
-        for (const auto& record : records) {
+        for (int i = 0; i < records.size(); ++i) {
+            const auto& record = records[i];
             if (record.size() < 8) {
+                continue;
+            }
+
+            // 跳过已逻辑删除的记录
+            if (i < headers.size() && headers[i].deleteTxnId != INVALID_TXN_ID) {
                 continue;
             }
 

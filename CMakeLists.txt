@@ -59,7 +59,7 @@ target_link_libraries(qindb
 
 # 静态链接选项
 if(WIN32)
-    target_link_options(qindb PRIVATE -static -static-libgcc -static-libstdc++)
+    target_link_options(qindb PRIVATE -static -static-libgcc -static-libstdc++ -Wl,-subsystem,console)
 endif()
 
 # 启用警告
@@ -83,4 +83,3 @@ if(BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
-

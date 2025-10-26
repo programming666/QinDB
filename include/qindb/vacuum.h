@@ -19,8 +19,6 @@ namespace qindb {
  * 支持手动触发和后台自动清理
  */
 class VacuumWorker : public QObject {
-    Q_OBJECT
-
 public:
     /**
      * @brief 构造函数

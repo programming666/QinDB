@@ -22,12 +22,12 @@ namespace qindb {
 struct DatabaseDef {
     QString name;                                   // 数据库名
     QString path;                                   // 数据库目录路径
+    std::unique_ptr<DiskManager> diskManager;       // 磁盘管理器 (必须在 bufferPool 之前声明，这样会在 bufferPool 之后析构)
     std::unique_ptr<Catalog> catalog;               // 元数据管理器
     std::unique_ptr<BufferPoolManager> bufferPool;  // 缓冲池
-    std::unique_ptr<DiskManager> diskManager;       // 磁盘管理器
     std::unique_ptr<WALManager> walManager;         // WAL管理器
     std::unique_ptr<TransactionManager> transactionManager;  // 事务管理器
-    std::unique_ptr<PermissionManager> permissionManager;    // ?????
+    std::unique_ptr<PermissionManager> permissionManager;    // 权限管理器
 
     DatabaseDef(const QString& dbName, const QString& dbPath)
         : name(dbName), path(dbPath) {}

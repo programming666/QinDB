@@ -4,6 +4,7 @@
 #include <QString>
 #include <QVector>
 #include <QMap>
+#include <QVariant>
 #include <functional>
 #include <iostream>
 
@@ -212,6 +213,44 @@ private:
         return true; \
     }(); \
     void TestName()
+
+// 模板函数实现
+template<typename T>
+void TestCase::assertEqual(const T& expected, const T& actual, const QString& message) {
+    if (expected != actual) {
+        QString fullMessage = message + QString(" (expected: %1, actual: %2)")
+            .arg(QVariant::fromValue(expected).toString())
+            .arg(QVariant::fromValue(actual).toString());
+        addResult("assertEqual", false, fullMessage);
+        throw std::runtime_error(fullMessage.toStdString());
+    }
+}
+
+template<typename T>
+void TestCase::assertNotEqual(const T& expected, const T& actual, const QString& message) {
+    if (expected == actual) {
+        QString fullMessage = message + QString(" (both values are: %1)")
+            .arg(QVariant::fromValue(expected).toString());
+        addResult("assertNotEqual", false, fullMessage);
+        throw std::runtime_error(fullMessage.toStdString());
+    }
+}
+
+template<typename T>
+void TestCase::assertNull(const T* ptr, const QString& message) {
+    if (ptr != nullptr) {
+        addResult("assertNull", false, message);
+        throw std::runtime_error(message.toStdString());
+    }
+}
+
+template<typename T>
+void TestCase::assertNotNull(const T* ptr, const QString& message) {
+    if (ptr == nullptr) {
+        addResult("assertNotNull", false, message);
+        throw std::runtime_error(message.toStdString());
+    }
+}
 
 } // namespace test
 } // namespace qindb

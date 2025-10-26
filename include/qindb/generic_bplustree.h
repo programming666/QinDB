@@ -162,7 +162,7 @@ private:
      * @brief 在父节点中插入
      */
     bool insertIntoParent(PageId parentPageId, const QByteArray& key,
-                         PageId leftPageId, PageId rightPageId);
+                         /*PageId leftPageId, */ PageId rightPageId);
 
     /**
      * @brief 创建新根节点
@@ -247,13 +247,13 @@ private:
      * @brief 与左兄弟合并（叶子节点）
      */
     bool mergeWithLeftSiblingLeaf(PageId nodePageId, PageId leftSiblingPageId,
-                                  PageId parentPageId, int keyIndexInParent);
+                                  PageId parentPageId);
 
     /**
      * @brief 与右兄弟合并（叶子节点）
      */
     bool mergeWithRightSiblingLeaf(PageId nodePageId, PageId rightSiblingPageId,
-                                   PageId parentPageId, int keyIndexInParent);
+                                   PageId parentPageId);
 
     /**
      * @brief 从父节点删除键

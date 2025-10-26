@@ -317,10 +317,11 @@ QVector<UserRecord> AuthManager::getAllUsers() {
         }
         LOG_INFO(QString("Page %1 fetched successfully").arg(pageId));
 
-        // 获取页面中的所有记录
+        // 获取页面中的所有记录（包含RecordHeader用于MVCC检查）
         QVector<QVector<QVariant>> records;
+        QVector<RecordHeader> headers;
         LOG_INFO(QString("Getting all records from page %1").arg(pageId));
-        if (!TablePage::getAllRecords(page, tableDef, records)) {
+        if (!TablePage::getAllRecords(page, tableDef, records, headers)) {
             LOG_WARN(QString("Failed to get records from page %1").arg(pageId));
             bufferPool_->unpinPage(pageId, false);
             break;
@@ -328,8 +329,15 @@ QVector<UserRecord> AuthManager::getAllUsers() {
         LOG_INFO(QString("Got %1 records from page %2").arg(records.size()).arg(pageId));
 
         // 解析用户记录
-        for (const auto& record : records) {
+        for (int i = 0; i < records.size(); ++i) {
+            const auto& record = records[i];
             if (record.isEmpty()) continue;
+
+            // 跳过已逻辑删除的记录
+            if (i < headers.size() && headers[i].deleteTxnId != INVALID_TXN_ID) {
+                LOG_DEBUG(QString("Skipping deleted user record (deleteTxnId=%1)").arg(headers[i].deleteTxnId));
+                continue;
+            }
 
             UserRecord user;
             user.id = record[0].toULongLong();
@@ -548,8 +556,8 @@ bool AuthManager::deleteUser(const QString& username) {
 
             // 检查是否是目标用户
             if (record[1].toString() == username) {
-                // 删除记录
-                TablePage::deleteRecord(page, slotIndex, INVALID_TXN_ID);
+                // 删除记录 (使用事务ID=1表示系统删除)
+                TablePage::deleteRecord(page, slotIndex, 1);
                 bufferPool_->unpinPage(pageId, true);
                 return true;
             }

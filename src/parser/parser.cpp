@@ -70,6 +70,11 @@ std::unique_ptr<ast::ASTNode> Parser::parse() {
         return nullptr;
     }
 
+    // 消费可选的分号
+    if (check(TokenType::SEMICOLON)) {
+        advance();
+    }
+
     // 检查是否还有多余的 Token
     if (!check(TokenType::EOF_TOKEN)) {
         setError(ErrorCode::SYNTAX_ERROR, "Unexpected tokens after statement",
@@ -247,6 +252,43 @@ std::unique_ptr<ast::SelectStatement> Parser::parseSelect() {
         }
         stmt->offset = m_currentToken.value.toInt();
         advance();
+    }
+
+    // INTO OUTFILE 子句（可选）
+    if (match(TokenType::INTO)) {
+        if (!consume(TokenType::OUTFILE, "Expected OUTFILE after INTO")) {
+            return nullptr;
+        }
+
+        // 获取文件路径
+        if (!check(TokenType::STRING)) {
+            setError(ErrorCode::SYNTAX_ERROR, "OUTFILE requires string path", "");
+            return nullptr;
+        }
+        stmt->exportFilePath = m_currentToken.value.toString();
+        advance();
+
+        // FORMAT 子句（可选，默认 CSV）
+        if (match(TokenType::FORMAT)) {
+            if (!check(TokenType::IDENTIFIER)) {
+                setError(ErrorCode::SYNTAX_ERROR, "FORMAT requires format name (JSON/CSV/XML)", "");
+                return nullptr;
+            }
+            stmt->exportFormat = m_currentToken.lexeme.toUpper();
+            advance();
+
+            // 验证格式
+            if (stmt->exportFormat != "JSON" &&
+                stmt->exportFormat != "CSV" &&
+                stmt->exportFormat != "XML") {
+                setError(ErrorCode::SYNTAX_ERROR,
+                        "Invalid export format. Must be JSON, CSV, or XML", "");
+                return nullptr;
+            }
+        } else {
+            // 默认格式为 CSV
+            stmt->exportFormat = "CSV";
+        }
     }
 
     return stmt;
@@ -1691,12 +1733,9 @@ std::unique_ptr<ast::RevokeStatement> Parser::parseRevoke() {
     }
 
     // FROM
-    if (m_currentToken.type != TokenType::IDENTIFIER || m_currentToken.lexeme.toLower() != "from") {
-        setError(ErrorCode::SYNTAX_ERROR, "Expected FROM",
-                 QString("Got '%1'").arg(m_currentToken.lexeme));
+    if (!consume(TokenType::FROM, "Expected FROM")) {
         return nullptr;
     }
-    advance();
 
     // 用户名
     if (m_currentToken.type != TokenType::IDENTIFIER) {

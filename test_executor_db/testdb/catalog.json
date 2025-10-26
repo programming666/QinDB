@@ -1,0 +1,429 @@
+{
+    "tables": [
+        {
+            "columns": [
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "id",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 3
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "name",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 17
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "quantity",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 3
+                }
+            ],
+            "firstPageId": 5,
+            "indexes": [
+            ],
+            "name": "items",
+            "nextRowId": 3
+        },
+        {
+            "columns": [
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "id",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 3
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "name",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 17
+                }
+            ],
+            "firstPageId": 8,
+            "indexes": [
+                {
+                    "autoCreated": false,
+                    "columns": [
+                        "name"
+                    ],
+                    "indexType": 0,
+                    "keyType": 17,
+                    "name": "idx_name",
+                    "rootPageId": 9,
+                    "unique": false
+                }
+            ],
+            "name": "indexed_table",
+            "nextRowId": 1
+        },
+        {
+            "columns": [
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "id",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 3
+                }
+            ],
+            "firstPageId": 11,
+            "indexes": [
+            ],
+            "name": "table2",
+            "nextRowId": 1
+        },
+        {
+            "columns": [
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "id",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 3
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "message",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 17
+                }
+            ],
+            "firstPageId": 16,
+            "indexes": [
+            ],
+            "name": "logs",
+            "nextRowId": 11
+        },
+        {
+            "columns": [
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "id",
+                    "notNull": false,
+                    "primaryKey": true,
+                    "type": 3
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "name",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 17
+                }
+            ],
+            "firstPageId": 2,
+            "indexes": [
+            ],
+            "name": "users",
+            "nextRowId": 1
+        },
+        {
+            "columns": [
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "id",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 3
+                }
+            ],
+            "firstPageId": 10,
+            "indexes": [
+            ],
+            "name": "table1",
+            "nextRowId": 1
+        },
+        {
+            "columns": [
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "id",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 3
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "name",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 17
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "email",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 17
+                }
+            ],
+            "firstPageId": 13,
+            "indexes": [
+            ],
+            "name": "customers",
+            "nextRowId": 4
+        },
+        {
+            "columns": [
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "id",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 3
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "balance",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 10
+                }
+            ],
+            "firstPageId": 14,
+            "indexes": [
+            ],
+            "name": "accounts",
+            "nextRowId": 2
+        },
+        {
+            "columns": [
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "id",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 3
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "value",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 17
+                }
+            ],
+            "firstPageId": 6,
+            "indexes": [
+            ],
+            "name": "temp",
+            "nextRowId": 5
+        },
+        {
+            "columns": [
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "id",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 3
+                }
+            ],
+            "firstPageId": 12,
+            "indexes": [
+            ],
+            "name": "table3",
+            "nextRowId": 1
+        },
+        {
+            "columns": [
+                {
+                    "autoIncrement": true,
+                    "length": 0,
+                    "name": "id",
+                    "notNull": false,
+                    "primaryKey": true,
+                    "type": 5
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 128,
+                    "name": "username",
+                    "notNull": true,
+                    "primaryKey": false,
+                    "type": 17
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 128,
+                    "name": "database_name",
+                    "notNull": true,
+                    "primaryKey": false,
+                    "type": 17
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 128,
+                    "name": "table_name",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 17
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 32,
+                    "name": "privilege_type",
+                    "notNull": true,
+                    "primaryKey": false,
+                    "type": 17
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "with_grant_option",
+                    "notNull": true,
+                    "primaryKey": false,
+                    "type": 44
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "granted_at",
+                    "notNull": true,
+                    "primaryKey": false,
+                    "type": 38
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 128,
+                    "name": "granted_by",
+                    "notNull": true,
+                    "primaryKey": false,
+                    "type": 17
+                }
+            ],
+            "firstPageId": 1,
+            "indexes": [
+            ],
+            "name": "sys_permissions",
+            "nextRowId": 1
+        },
+        {
+            "columns": [
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "id",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 3
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "amount",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 10
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "status",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 17
+                }
+            ],
+            "firstPageId": 15,
+            "indexes": [
+            ],
+            "name": "orders",
+            "nextRowId": 5
+        },
+        {
+            "columns": [
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "id",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 3
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "name",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 17
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "salary",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 10
+                }
+            ],
+            "firstPageId": 4,
+            "indexes": [
+            ],
+            "name": "employees",
+            "nextRowId": 7
+        },
+        {
+            "columns": [
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "id",
+                    "notNull": false,
+                    "primaryKey": true,
+                    "type": 3
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "name",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 17
+                },
+                {
+                    "autoIncrement": false,
+                    "length": 0,
+                    "name": "price",
+                    "notNull": false,
+                    "primaryKey": false,
+                    "type": 10
+                }
+            ],
+            "firstPageId": 3,
+            "indexes": [
+            ],
+            "name": "products",
+            "nextRowId": 4
+        }
+    ]
+}

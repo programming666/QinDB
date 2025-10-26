@@ -46,6 +46,7 @@ enum class TokenType {
     MATCH, AGAINST,
     AUTO_INCREMENT, NOT_NULL,
     USING,
+    OUTFILE, FORMAT,
 
     // 操作符
     PLUS, MINUS, STAR, SLASH, PERCENT,

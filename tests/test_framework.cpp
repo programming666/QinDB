@@ -17,68 +17,12 @@ void TestCase::assertTrue(bool condition, const QString& message) {
     }
 }
 
-template<typename T>
-void TestCase::assertEqual(const T& expected, const T& actual, const QString& message) {
-    if (expected != actual) {
-        QString msg = message.isEmpty()
-            ? QString("Expected: %1, Actual: %2").arg(expected).arg(actual)
-            : message;
-        addResult("assertEqual", false, msg);
-        throw std::runtime_error(msg.toStdString());
-    }
-}
-
-// 显式实例化常用类型
-template void TestCase::assertEqual<int>(const int&, const int&, const QString&);
-template void TestCase::assertEqual<QString>(const QString&, const QString&, const QString&);
-template void TestCase::assertEqual<bool>(const bool&, const bool&, const QString&);
-template void TestCase::assertEqual<double>(const double&, const double&, const QString&);
-template void TestCase::assertEqual<unsigned long long>(const unsigned long long&, const unsigned long long&, const QString&);
-template void TestCase::assertEqual<unsigned int>(const unsigned int&, const unsigned int&, const QString&);
-template void TestCase::assertEqual<std::string>(const std::string&, const std::string&, const QString&);
-
-template void TestCase::assertNotEqual<int>(const int&, const int&, const QString&);
-template void TestCase::assertNotEqual<QString>(const QString&, const QString&, const QString&);
-
-template<typename T>
-void TestCase::assertNotEqual(const T& expected, const T& actual, const QString& message) {
-    if (expected == actual) {
-        QString msg = message.isEmpty()
-            ? QString("Values should not be equal: %1").arg(expected)
-            : message;
-        addResult("assertNotEqual", false, msg);
-        throw std::runtime_error(msg.toStdString());
-    }
-}
-
 void TestCase::assertFalse(bool condition, const QString& message) {
     if (condition) {
         addResult("assertFalse", false, message);
         throw std::runtime_error(message.toStdString());
     }
 }
-
-template<typename T>
-void TestCase::assertNull(const T* ptr, const QString& message) {
-    if (ptr != nullptr) {
-        addResult("assertNull", false, message);
-        throw std::runtime_error(message.toStdString());
-    }
-}
-
-template void TestCase::assertNull<int>(const int*, const QString&);
-template void TestCase::assertNull<void>(const void*, const QString&);
-
-template<typename T>
-void TestCase::assertNotNull(const T* ptr, const QString& message) {
-    if (ptr == nullptr) {
-        addResult("assertNotNull", false, message);
-        throw std::runtime_error(message.toStdString());
-    }
-}
-
-template void TestCase::assertNotNull<int>(const int*, const QString&);
-template void TestCase::assertNotNull<void>(const void*, const QString&);
 
 void TestCase::addResult(const QString& testName, bool passed, const QString& message, double elapsedMs) {
     results_.append(TestResult(testName, passed, message, elapsedMs));
@@ -100,9 +44,9 @@ void TestSuite::addTest(TestCase* test) {
 }
 
 void TestSuite::runAll() {
-    std::cout << "\n========================================" << std::endl;
+    std::wcout << L"\n========================================" << std::endl;
     std::cout << "Running Test Suite: " << name_.toStdString() << std::endl;
-    std::cout << "========================================" << std::endl;
+    std::wcout << L"========================================" << std::endl;
 
     for (TestCase* test : tests_) {
         std::cout << "\n[TEST] " << test->getName().toStdString() << " ... ";
@@ -139,16 +83,16 @@ void TestSuite::runAll() {
 }
 
 void TestSuite::printReport() const {
-    std::cout << "\n========================================" << std::endl;
+    std::wcout << L"\n========================================" << std::endl;
     std::cout << "Test Suite Report: " << name_.toStdString() << std::endl;
-    std::cout << "========================================" << std::endl;
+    std::wcout << L"========================================" << std::endl;
     std::cout << "Total Tests:  " << stats_.totalTests << std::endl;
     std::cout << "Passed:       " << stats_.passedTests << " (" << std::fixed << std::setprecision(1)
               << stats_.passRate() << "%)" << std::endl;
     std::cout << "Failed:       " << stats_.failedTests << std::endl;
     std::cout << "Total Time:   " << std::fixed << std::setprecision(2)
               << stats_.totalTimeMs << " ms" << std::endl;
-    std::cout << "========================================\n" << std::endl;
+    std::wcout << L"========================================\n" << std::endl;
 }
 
 // ========== TestRunner 实现 ==========
@@ -163,9 +107,9 @@ void TestRunner::registerSuite(TestSuite* suite) {
 }
 
 int TestRunner::runAll() {
-    std::cout << "\n╔════════════════════════════════════════╗" << std::endl;
-    std::cout << "║     qinDB Automated Test Runner       ║" << std::endl;
-    std::cout << "╚════════════════════════════════════════╝\n" << std::endl;
+    std::wcout << L"\n╔════════════════════════════════════════╗" << std::endl;
+    std::wcout << L"║     qinDB Automated Test Runner       ║" << std::endl;
+    std::wcout << L"╚════════════════════════════════════════╝\n" << std::endl;
 
     for (TestSuite* suite : suites_) {
         suite->runAll();
@@ -184,9 +128,9 @@ int TestRunner::runAll() {
 }
 
 void TestRunner::printSummary() const {
-    std::cout << "\n╔════════════════════════════════════════╗" << std::endl;
-    std::cout << "║          OVERALL SUMMARY               ║" << std::endl;
-    std::cout << "╚════════════════════════════════════════╝" << std::endl;
+    std::wcout << L"\n╔════════════════════════════════════════╗" << std::endl;
+    std::wcout << L"║          OVERALL SUMMARY               ║" << std::endl;
+    std::wcout << L"╚════════════════════════════════════════╝" << std::endl;
     std::cout << "Total Test Suites: " << suites_.size() << std::endl;
     std::cout << "Total Tests:       " << globalStats_.totalTests << std::endl;
     std::cout << "Passed:            " << globalStats_.passedTests << " ("
@@ -196,11 +140,11 @@ void TestRunner::printSummary() const {
               << globalStats_.totalTimeMs << " ms" << std::endl;
 
     if (globalStats_.failedTests == 0) {
-        std::cout << "\n✓ ALL TESTS PASSED!" << std::endl;
+        std::wcout << L"\n✓ ALL TESTS PASSED!" << std::endl;
     } else {
-        std::cout << "\n✗ SOME TESTS FAILED!" << std::endl;
+        std::wcout << L"\n✗ SOME TESTS FAILED!" << std::endl;
     }
-    std::cout << "════════════════════════════════════════\n" << std::endl;
+    std::wcout << L"════════════════════════════════════════\n" << std::endl;
 }
 
 } // namespace test
