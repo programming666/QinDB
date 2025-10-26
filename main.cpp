@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <QtNetwork/QTcpSocket>
+#include <QThread>
 #include "qindb/logger.h"
 #include "qindb/lexer.h"
 #include "qindb/parser.h"
@@ -13,6 +14,8 @@
 #include "qindb/buffer_pool_manager.h"
 #include "qindb/auth_manager.h"
 #include "qindb/server.h"
+#include "qindb/client_manager.h"
+#include "qindb/connection_string_parser.h"
 #include <QFile>
 #include <QDateTime>
 
@@ -306,26 +309,67 @@ void analyzeSql(const QString& sql, qindb::Executor* executor) {
 }
 
 /**
- * @brief 运行客户端模式
- * @param host 服务器主机地址
- * @param port 服务器端口
+ * @brief 运行客户端模式（使用连接字符串）
+ * @param connectionString 连接字符串
  * @return 客户端程序退出代码
  */
-int runClientMode(const QString& host, uint16_t port) {
-    std::wcout << L"正在连接到服务器 " << host.toStdWString() << L":" << port << L"...\n" << std::endl;
-
-    // 创建TCP连接
-    QTcpSocket socket;
-    socket.connectToHost(host, port);
-
-    if (!socket.waitForConnected(5000)) {
-        std::wcout << L"✗ 无法连接到服务器: " << socket.errorString().toStdWString() << L"\n" << std::endl;
+int runClientMode(const QString& connectionString) {
+    // 解析连接字符串
+    auto paramsOpt = qindb::ConnectionStringParser::parse(connectionString);
+    if (!paramsOpt) {
+        std::wcout << L"✗ 无效的连接字符串格式\n";
+        std::wcout << L"连接字符串格式: qindb://主机:端口?usr=用户名&pswd=密码&ssl=是否启用\n";
         return 1;
     }
 
-    std::wcout << L"✓ 已成功连接到服务器\n" << std::endl;
+    auto params = paramsOpt.value();
 
-    // 简单的客户端交互循环
+    std::wcout << L"正在连接到服务器 " << params.host.toStdWString() 
+              << L":" << params.port << L"...\n" << std::endl;
+
+    // 创建客户端管理器
+    qindb::ClientManager clientManager;
+
+    // 连接信号槽
+    QObject::connect(&clientManager, &qindb::ClientManager::connected, [&]() {
+        std::wcout << L"✓ 连接成功\n" << std::endl;
+    });
+
+    QObject::connect(&clientManager, &qindb::ClientManager::authenticated, [&]() {
+        std::wcout << L"✓ 认证成功\n" << std::endl;
+    });
+
+    QObject::connect(&clientManager, &qindb::ClientManager::authenticationFailed, [](const QString& error) {
+        std::wcout << L"✗ 认证失败: " << error.toStdWString() << L"\n" << std::endl;
+    });
+
+    QObject::connect(&clientManager, &qindb::ClientManager::error, [](const QString& error) {
+        std::wcout << L"✗ 错误: " << error.toStdWString() << L"\n" << std::endl;
+    });
+
+    QObject::connect(&clientManager, &qindb::ClientManager::queryResponse, [](const qindb::QueryResponse& response) {
+        std::wcout << L"收到查询响应\n" << std::endl;
+        // 这里可以添加响应处理逻辑
+    });
+
+    // 连接到服务器
+    if (!clientManager.connectToServer(params)) {
+        std::wcout << L"✗ 连接服务器失败\n" << std::endl;
+        return 1;
+    }
+
+    // 等待认证完成
+    while (!clientManager.isAuthenticated()) {
+        QCoreApplication::processEvents();
+        QThread::msleep(100);
+    }
+
+    if (!clientManager.isAuthenticated()) {
+        std::wcout << L"✗ 认证失败，无法继续\n" << std::endl;
+        return 1;
+    }
+
+    // 客户端交互循环
     std::wstring line;
     std::wstring sqlBuffer;
 
@@ -402,14 +446,15 @@ int runClientMode(const QString& host, uint16_t port) {
             continue;
         }
 
-        // 这里应该实现网络协议通信
-        // 由于客户端实现比较复杂，这里先显示一个占位符消息
-        std::wcout << L"客户端模式正在开发中...\n";
-        std::wcout << L"SQL: " << sql.toStdWString() << L"\n";
-        std::wcout << L"当前需要服务器模式支持网络协议通信。\n" << std::endl;
+        // 发送查询到服务器
+        if (clientManager.sendQuery(sql)) {
+            std::wcout << L"✓ 查询已发送\n" << std::endl;
+        } else {
+            std::wcout << L"✗ 发送查询失败\n" << std::endl;
+        }
     }
 
-    socket.disconnectFromHost();
+    clientManager.disconnectFromServer();
     std::wcout << L"已断开与服务器的连接\n" << std::endl;
     return 0;
 }
@@ -527,8 +572,7 @@ int main(int argc, char *argv[])
         // 检查命令行参数
         bool isServerMode = false;
         bool isClientMode = false;
-        QString clientHost = "localhost";
-        uint16_t clientPort = 24678;
+        QString connectionString = "qindb://localhost:24678?usr=admin&pswd=&ssl=false";
 
         for (int i = 1; i < argc; i++) {
             QString arg = QString::fromUtf8(argv[i]);
@@ -536,19 +580,17 @@ int main(int argc, char *argv[])
                 isServerMode = true;
             } else if (arg == "--client" || arg == "-c") {
                 isClientMode = true;
-            } else if (arg.startsWith("--host=") || arg.startsWith("-h=")) {
-                clientHost = arg.mid(arg.indexOf('=') + 1);
-            } else if (arg.startsWith("--port=") || arg.startsWith("-p=")) {
-                bool ok;
-                clientPort = arg.mid(arg.indexOf('=') + 1).toUInt(&ok);
-                if (!ok) clientPort = 24678;
+            } else if (arg.startsWith("--connect=") || arg.startsWith("-c=")) {
+                connectionString = arg.mid(arg.indexOf('=') + 1);
             } else if (arg == "--help" || arg == "-?") {
                 std::wcout << L"用法: qindb [选项]\n";
-                std::wcout << L"  --server, -s              以服务器模式启动\n";
-                std::wcout << L"  --client, -c              以客户端模式启动\n";
-                std::wcout << L"  --host=<主机>, -h=<主机>  客户端连接的主机地址\n";
-                std::wcout << L"  --port=<端口>, -p=<端口>  客户端连接的端口\n";
-                std::wcout << L"  --help, -?                显示帮助信息\n";
+                std::wcout << L"  --server, -s                    以服务器模式启动\n";
+                std::wcout << L"  --client, -c                    以客户端模式启动\n";
+                std::wcout << L"  --connect=<连接字符串>          客户端连接字符串\n";
+                std::wcout << L"  --help, -?                      显示帮助信息\n";
+                std::wcout << L"\n连接字符串格式:\n";
+                std::wcout << L"  qindb://主机:端口?usr=用户名&pswd=密码&ssl=是否启用\n";
+                std::wcout << L"  示例: qindb://localhost:24678?usr=admin&pswd=123&ssl=false\n";
                 return 0;
             }
         }
@@ -560,7 +602,7 @@ int main(int argc, char *argv[])
 
         // 如果是客户端模式，启动客户端
         if (isClientMode) {
-            return runClientMode(clientHost, clientPort);
+            return runClientMode(connectionString);
         }
 
         // 加载配置文件（如果不存在则创建默认配置）

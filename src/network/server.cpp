@@ -111,10 +111,63 @@ bool Server::isIPWhitelisted(const QString& ip) const {
         return true;  // 白名单未启用，允许所有 IP
     }
 
-    // 简化版本：直接字符串匹配
-    // TODO: 实现 CIDR 格式匹配（例如：192.168.1.0/24）
+    // 将IP地址字符串转换为四字节整数
+    QStringList ipParts = ip.split('.');
+    if (ipParts.size() != 4) {
+        return false;  // 无效的IPv4地址
+    }
+
+    bool ok;
+    uint32_t ipValue = 0;
+    for (int i = 0; i < 4; i++) {
+        uint8_t octet = ipParts[i].toUInt(&ok);
+        if (!ok || ipParts[i].isEmpty()) {
+            return false;  // 无效的IP八位字节
+        }
+        ipValue = (ipValue << 8) | octet;
+    }
+
+    // 检查每个CIDR范围
     for (const QString& cidr : ipWhitelist_) {
-        if (ip.startsWith(cidr.section('/', 0, 0))) {
+        // 解析CIDR表示法（例如：192.168.1.0/24）
+        int slashIndex = cidr.indexOf('/');
+        QString networkStr;
+        int prefixLen = 32;  // 默认为单个IP地址
+
+        if (slashIndex != -1) {
+            networkStr = cidr.left(slashIndex);
+            prefixLen = cidr.mid(slashIndex + 1).toInt(&ok);
+            if (!ok || prefixLen < 0 || prefixLen > 32) {
+                LOG_WARN(QString("Invalid CIDR prefix length: %1").arg(cidr));
+                continue;
+            }
+        } else {
+            networkStr = cidr;
+        }
+
+        // 解析网络地址
+        QStringList networkParts = networkStr.split('.');
+        if (networkParts.size() != 4) {
+            LOG_WARN(QString("Invalid CIDR network address: %1").arg(networkStr));
+            continue;
+        }
+
+        uint32_t networkValue = 0;
+        for (int i = 0; i < 4; i++) {
+            uint8_t octet = networkParts[i].toUInt(&ok);
+            if (!ok || networkParts[i].isEmpty()) {
+                LOG_WARN(QString("Invalid CIDR network octet: %1").arg(networkStr));
+                networkValue = 0;
+                break;
+            }
+            networkValue = (networkValue << 8) | octet;
+        }
+
+        // 计算网络掩码
+        uint32_t mask = (prefixLen == 0) ? 0 : (0xFFFFFFFFU << (32 - prefixLen));
+
+        // 检查IP是否在CIDR范围内
+        if ((ipValue & mask) == (networkValue & mask)) {
             return true;
         }
     }

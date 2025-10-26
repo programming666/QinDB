@@ -23,6 +23,7 @@ target_include_directories(qindb_tests PRIVATE
 # 链接库
 target_link_libraries(qindb_tests PRIVATE
     Qt6::Core
+    Qt6::Network
 )
 
 
@@ -69,6 +70,8 @@ target_sources(qindb_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/utils/result_exporter.cpp
     ${CMAKE_SOURCE_DIR}/src/core/config.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/logger.cpp
+    # 添加连接字符串解析器（用于test_connection_string）
+    ${CMAKE_SOURCE_DIR}/src/network/connection_string_parser.cpp
 )
 
 # 添加测试
@@ -136,6 +139,34 @@ target_sources(qindb_benchmarks PRIVATE
     ${CMAKE_SOURCE_DIR}/src/core/config.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/logger.cpp
 )
+
+# Connection String Parser 测试可执行文件
+add_executable(test_connection_string
+    test_framework.cpp
+    test_connection_string.cpp
+)
+
+target_include_directories(test_connection_string PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/tests
+)
+
+target_link_libraries(test_connection_string PRIVATE
+    Qt6::Core
+    Qt6::Network
+)
+
+
+if(WIN32)
+    target_link_options(test_connection_string PRIVATE -Wl,-subsystem,console)
+endif()
+
+target_sources(test_connection_string PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/network/connection_string_parser.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/logger.cpp
+)
+
+add_test(NAME test_connection_string COMMAND test_connection_string)
 
 # Parser 测试可执行文件
 add_executable(test_parser
@@ -425,3 +456,31 @@ target_sources(test_executor PRIVATE
 )
 
 add_test(NAME test_executor COMMAND test_executor)
+
+# IP Whitelist CIDR 测试可执行文件
+add_executable(test_ip_whitelist
+    test_framework.cpp
+    test_ip_whitelist.cpp
+)
+
+target_include_directories(test_ip_whitelist PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/tests
+)
+
+target_link_libraries(test_ip_whitelist PRIVATE
+    Qt6::Core
+    Qt6::Network
+)
+
+
+if(WIN32)
+    target_link_options(test_ip_whitelist PRIVATE -Wl,-subsystem,console)
+endif()
+
+target_sources(test_ip_whitelist PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/utils/logger.cpp
+)
+
+add_test(NAME test_ip_whitelist COMMAND test_ip_whitelist)
+

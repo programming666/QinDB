@@ -14,6 +14,7 @@
 #include "test_executor.cpp"
 #include "test_query_cache.cpp"
 #include "test_result_exporter.cpp"
+#include "test_connection_string.cpp"
 #include <QCoreApplication>
 
 using namespace qindb::test;
@@ -33,6 +34,7 @@ int main(int argc, char *argv[]) {
     TestSuite executorSuite("Executor Tests");
     TestSuite queryCacheSuite("Query Cache Tests");
     TestSuite resultExporterSuite("Result Exporter Tests");
+    TestSuite connectionStringSuite("Connection String Tests");
 
     // 添加B+树测试
     bptreeSuite.addTest(new BPlusTreeTest());
@@ -67,6 +69,9 @@ int main(int argc, char *argv[]) {
     // 添加结果导出测试
     resultExporterSuite.addTest(new ResultExporterTests());
 
+    // 添加连接字符串测试
+    connectionStringSuite.addTest(new TestConnectionString());
+
     // 注册测试套件
     TestRunner::instance().registerSuite(&bptreeSuite);
     TestRunner::instance().registerSuite(&bufferPoolSuite);
@@ -79,6 +84,7 @@ int main(int argc, char *argv[]) {
     TestRunner::instance().registerSuite(&executorSuite);
     TestRunner::instance().registerSuite(&queryCacheSuite);
     TestRunner::instance().registerSuite(&resultExporterSuite);
+    TestRunner::instance().registerSuite(&connectionStringSuite);
 
     // 运行所有测试
     int result = TestRunner::instance().runAll();
