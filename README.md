@@ -279,7 +279,45 @@ qindb/
 
 ## 许可证
 
-本项目采用 MIT 许可证，详见 [LICENSE](LICENSE) 文件。
+本项目采用 NCRPL 许可证，详见 [LICENSE](LICENSE) 文件。
+
+本项目使用以下LGPL许可的组件：
+
+组件名称：Qt Core 模块
+
+版本：6.10
+
+来源：https://www.qt.io/
+
+许可证：GNU Lesser General Public License v3.0
+
+许可证文本：见 [LICENSE.LGPL](LICENSE.LGPL) 文件
+
+声明：本项目通过动态链接使用该模块，用户可自由替换为兼容版本
+
+组件名称：Qt Network 模块
+
+版本：6.10
+
+来源：https://www.qt.io/
+
+许可证：GNU Lesser General Public License v3.0
+
+许可证文本：见 [LICENSE.LGPL](LICENSE.LGPL) 文件
+
+声明：本项目通过动态链接使用该模块，用户可自由替换为兼容版本
+
+### 替换说明
+本项目通过CMake的`target_link_libraries`动态链接Qt库：
+```cmake
+target_link_libraries(qindb
+    PRIVATE
+        Qt::Core
+        Qt::Network
+)
+```
+
+--- 
 
 ## 联系方式
 邮箱：mailto:contact@qinyining.cn
