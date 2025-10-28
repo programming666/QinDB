@@ -50,7 +50,8 @@ private:
             QString csv = ResultExporter::exportToCSV(result);
 
             assertTrue(!csv.isEmpty(), "CSV output should not be empty");
-            assertTrue(csv.contains("id,name,salary"), "CSV should contain header");
+            // CSV格式使用引号包围字段
+            assertTrue(csv.contains("\"id\"") && csv.contains("\"name\"") && csv.contains("\"salary\""), "CSV should contain header");
             assertTrue(csv.contains("Alice"), "CSV should contain data");
             assertTrue(csv.contains("50000"), "CSV should contain numeric data");
 
@@ -141,7 +142,8 @@ private:
 
             QString csv = ResultExporter::exportToCSV(result);
             assertTrue(!csv.isEmpty(), "CSV should contain at least header");
-            assertTrue(csv.contains("id,name"), "CSV should contain header even for empty result");
+            // CSV格式使用引号
+            assertTrue(csv.contains("\"id\"") && csv.contains("\"name\""), "CSV should contain header even for empty result");
 
             QString json = ResultExporter::exportToJSON(result);
             assertTrue(json.contains("\"rowCount\": 0"), "JSON should show rowCount as 0");
