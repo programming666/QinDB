@@ -14,6 +14,7 @@
 #include "qindb/cost_optimizer.h"
 #include "qindb/permission_manager.h"
 #include "qindb/query_cache.h"
+#include "qindb/table_cache.h"
 #include "qindb/result_exporter.h"
 #include <algorithm>
 
@@ -26,8 +27,9 @@ Executor::Executor(DatabaseManager* dbManager)
     , queryRewriter_(std::make_unique<QueryRewriter>())
     , queryRewriteEnabled_(true)
     , queryCache_(std::make_unique<QueryCache>())
+    , tableCache_(std::make_unique<TableCache>())
 {
-    LOG_INFO("Executor initialized with query rewriter and query cache");
+    LOG_INFO("Executor initialized with query rewriter, query cache and table cache");
 }
 
 Executor::~Executor() {
@@ -261,6 +263,11 @@ QueryResult Executor::executeDropTable(const DropTableStatement* stmt) {
             LOG_DEBUG(QString("Invalidated %1 cache entries for table '%2'")
                          .arg(invalidated).arg(stmt->tableName));
         }
+    }
+
+    // 使表级缓存失效
+    if (tableCache_) {
+        tableCache_->invalidateTable(dbManager_->currentDatabaseName(), stmt->tableName);
     }
 
     LOG_INFO(QString("Table '%1' dropped successfully").arg(stmt->tableName));
@@ -562,6 +569,11 @@ QueryResult Executor::executeInsert(const InsertStatement* stmt) {
         }
     }
 
+    // 使表级缓存失效
+    if (tableCache_) {
+        tableCache_->invalidateTable(dbManager_->currentDatabaseName(), stmt->tableName);
+    }
+
     LOG_INFO(QString("INSERT INTO '%1': %2 row(s) inserted")
                 .arg(stmt->tableName)
                 .arg(insertedCount));
@@ -780,9 +792,42 @@ QueryResult Executor::executeSelect(const SelectStatement* stmt) {
 
         } else {
             // 无JOIN，执行简单的单表查询
-            // 设置列名 - 暂时返回所有列
-            for (const auto& col : leftTable->columns) {
-                result.columnNames.append(col.name);
+            // 设置列名 - 根据 selectList 设置
+            // 检查是否是 SELECT * 或者 selectList 为空
+            bool isSelectAll = actualStmt->selectList.empty();
+
+            // 检查是否是 SELECT * (解析器会创建 ColumnExpression("", "*"))
+            if (!isSelectAll && actualStmt->selectList.size() == 1) {
+                if (auto* colExpr = dynamic_cast<const ast::ColumnExpression*>(actualStmt->selectList[0].get())) {
+                    if (colExpr->column == "*") {
+                        isSelectAll = true;
+                    }
+                }
+            }
+
+            if (isSelectAll) {
+                // SELECT * - 返回所有列
+                for (const auto& col : leftTable->columns) {
+                    result.columnNames.append(col.name);
+                }
+            } else {
+                // SELECT 指定列 - 只返回选择的列
+                for (size_t i = 0; i < actualStmt->selectList.size(); ++i) {
+                    const Expression* expr = actualStmt->selectList[i].get();
+
+                    // 如果有别名，使用别名
+                    if (i < actualStmt->selectAliases.size() && !actualStmt->selectAliases[i].isEmpty()) {
+                        result.columnNames.append(actualStmt->selectAliases[i]);
+                    }
+                    // 如果是列表达式，使用列名
+                    else if (const ColumnExpression* colExpr = dynamic_cast<const ColumnExpression*>(expr)) {
+                        result.columnNames.append(colExpr->column);
+                    }
+                    // 其他表达式，使用表达式字符串
+                    else {
+                        result.columnNames.append(expr->toString());
+                    }
+                }
             }
 
             // 尝试使用索引优化查询
@@ -901,6 +946,37 @@ QueryResult Executor::executeSelect(const SelectStatement* stmt) {
             }
 
             if (!useIndex) {
+                // 尝试从表级缓存获取数据
+                QVector<QVector<QVariant>> cachedRows;
+                QVector<RecordHeader> cachedHeaders;
+                bool usedTableCache = false;
+
+                QString currentDbName = dbManager_->currentDatabaseName();
+                if (tableCache_ && tableCache_->isEnabled()) {
+                    // 检查表是否已缓存
+                    if (tableCache_->isTableCached(currentDbName, leftTableName)) {
+                        if (tableCache_->getTableData(currentDbName, leftTableName, cachedRows, cachedHeaders)) {
+                            LOG_INFO(QString("Table cache HIT: %1.%2 (%3 rows)")
+                                        .arg(currentDbName).arg(leftTableName).arg(cachedRows.size()));
+                            usedTableCache = true;
+                        }
+                    } else {
+                        // 尝试加载小表到缓存
+                        uint64_t tableSize = TableCache::estimateTableSize(const_cast<TableDef*>(leftTable), bufferPool);
+                        LOG_DEBUG(QString("Table %1.%2 size estimate: %3 bytes")
+                                    .arg(currentDbName).arg(leftTableName).arg(tableSize));
+
+                        if (tableCache_->loadTable(currentDbName, const_cast<TableDef*>(leftTable), bufferPool)) {
+                            // 加载成功，立即使用缓存
+                            if (tableCache_->getTableData(currentDbName, leftTableName, cachedRows, cachedHeaders)) {
+                                LOG_INFO(QString("Table %1.%2 loaded and cached (%3 rows)")
+                                            .arg(currentDbName).arg(leftTableName).arg(cachedRows.size()));
+                                usedTableCache = true;
+                            }
+                        }
+                    }
+                }
+
                 // 全表扫描（支持MVCC可见性检查）
                 // 获取当前事务ID
                 TransactionManager* txnManager = dbManager_->getCurrentTransactionManager();
@@ -917,10 +993,69 @@ QueryResult Executor::executeSelect(const SelectStatement* stmt) {
                     checker = new VisibilityChecker(txnManager);
                 }
 
-                // 扫描所有数据页，读取记录
-                PageId currentPageId = leftTable->firstPageId;
+                // 优先使用缓存数据，否则扫描磁盘
+                if (usedTableCache) {
+                    // 使用缓存的数据进行查询
+                    LOG_DEBUG("Processing query using cached table data");
 
-                while (currentPageId != INVALID_PAGE_ID) {
+                    for (int i = 0; i < cachedRows.size(); ++i) {
+                        const auto& record = cachedRows[i];
+                        const auto& recordHeader = cachedHeaders[i];
+
+                        bool includeRow = true;
+
+                        // MVCC可见性检查
+                        if (checker && !checker->isVisible(recordHeader, currentTxnId)) {
+                            continue;  // 跳过对当前事务不可见的记录
+                        }
+
+                        // 如果有WHERE子句，评估条件
+                        if (actualStmt->where && !useFullTextIndex) {
+                            QVariant whereResult = evaluator.evaluateWithRow(actualStmt->where.get(), leftTable, record);
+
+                            if (evaluator.hasError()) {
+                                delete checker;
+                                return createErrorResult(ErrorCode::SEMANTIC_ERROR,
+                                                        QString("WHERE clause evaluation error: %1")
+                                                            .arg(evaluator.getLastError()));
+                            }
+
+                            // SQL三值逻辑：只有明确为true才包含行
+                            includeRow = !whereResult.isNull() && whereResult.toBool();
+                        }
+
+                        if (includeRow) {
+                            // 应用列投影（SELECT 指定列）
+                            QVector<QVariant> projectedRow;
+
+                            if (isSelectAll) {
+                                // SELECT * - 返回所有列
+                                projectedRow = record;
+                            } else {
+                                // SELECT 指定列 - 只返回选择的列
+                                for (const auto& exprPtr : actualStmt->selectList) {
+                                    QVariant value = evaluator.evaluateWithRow(exprPtr.get(), leftTable, record);
+
+                                    if (evaluator.hasError()) {
+                                        delete checker;
+                                        return createErrorResult(ErrorCode::SEMANTIC_ERROR,
+                                                                QString("SELECT list evaluation error: %1")
+                                                                    .arg(evaluator.getLastError()));
+                                    }
+
+                                    projectedRow.append(value);
+                                }
+                            }
+
+                            result.rows.append(projectedRow);
+                            totalRows++;
+                        }
+                    }
+                } else {
+                    // 扫描所有数据页，读取记录（从磁盘）
+                    PageId currentPageId = leftTable->firstPageId;
+
+                    while (currentPageId != INVALID_PAGE_ID) {
                 Page* page = bufferPool->fetchPage(currentPageId);
                 if (!page) {
                     LOG_ERROR(QString("Failed to fetch page %1").arg(currentPageId));
@@ -977,8 +1112,30 @@ QueryResult Executor::executeSelect(const SelectStatement* stmt) {
                         }
 
                         if (includeRow) {
-                            // TODO: 应用列投影（SELECT 指定列）
-                            result.rows.append(record);
+                            // 应用列投影（SELECT 指定列）
+                            QVector<QVariant> projectedRow;
+
+                            if (isSelectAll) {
+                                // SELECT * - 返回所有列
+                                projectedRow = record;
+                            } else {
+                                // SELECT 指定列 - 只返回选择的列
+                                for (const auto& exprPtr : actualStmt->selectList) {
+                                    QVariant value = evaluator.evaluateWithRow(exprPtr.get(), leftTable, record);
+
+                                    if (evaluator.hasError()) {
+                                        bufferPool->unpinPage(currentPageId, false);
+                                        delete checker;
+                                        return createErrorResult(ErrorCode::SEMANTIC_ERROR,
+                                                                QString("SELECT list evaluation error: %1")
+                                                                    .arg(evaluator.getLastError()));
+                                    }
+
+                                    projectedRow.append(value);
+                                }
+                            }
+
+                            result.rows.append(projectedRow);
                             totalRows++;
                         }
                     }
@@ -989,7 +1146,8 @@ QueryResult Executor::executeSelect(const SelectStatement* stmt) {
                 PageId nextPageId = header->nextPageId;
                 bufferPool->unpinPage(currentPageId, false);
                 currentPageId = nextPageId;
-                }
+                    }
+                }  // end else (disk scan)
 
                 // 清理可见性检查器
                 delete checker;
@@ -1496,6 +1654,11 @@ QueryResult Executor::executeUpdate(const UpdateStatement* stmt) {
         }
     }
 
+    // 使表级缓存失效
+    if (tableCache_) {
+        tableCache_->invalidateTable(dbManager_->currentDatabaseName(), stmt->tableName);
+    }
+
     LOG_INFO(QString("UPDATE '%1': %2 row(s) updated, %3 failed")
                 .arg(stmt->tableName)
                 .arg(updatedCount)
@@ -1735,6 +1898,11 @@ QueryResult Executor::executeDelete(const DeleteStatement* stmt) {
         }
     }
 
+    // 使表级缓存失效
+    if (tableCache_) {
+        tableCache_->invalidateTable(dbManager_->currentDatabaseName(), stmt->tableName);
+    }
+
     LOG_INFO(QString("DELETE FROM '%1': %2 row(s) deleted, %3 failed")
                 .arg(stmt->tableName)
                 .arg(deletedCount)
@@ -1767,13 +1935,16 @@ QueryResult Executor::executeShowTables() {
 
     QVector<QString> tableNames = catalog->getAllTableNames();
 
+    // 过滤掉系统表(以sys_开头的表)
     for (const auto& tableName : tableNames) {
-        QVector<QVariant> row;
-        row.append(tableName);
-        result.rows.append(row);
+        if (!tableName.startsWith("sys_")) {
+            QVector<QVariant> row;
+            row.append(tableName);
+            result.rows.append(row);
+        }
     }
 
-    result.message = QString("Found %1 table(s)").arg(tableNames.size());
+    result.message = QString("Found %1 table(s)").arg(result.rows.size());
 
     return result;
 }
@@ -3097,6 +3268,43 @@ bool Executor::ensurePermission(const QString& databaseName,
             .arg(privName)
             .arg(target));
     return false;
+}
+
+// TableCache相关方法实现
+
+void Executor::setTableCacheEnabled(bool enabled) {
+    if (tableCache_) {
+        tableCache_->setEnabled(enabled);
+        LOG_INFO(QString("Table cache %1").arg(enabled ? "enabled" : "disabled"));
+    }
+}
+
+void Executor::clearTableCache() {
+    if (tableCache_) {
+        tableCache_->clear();
+        LOG_INFO("Table cache cleared");
+    }
+}
+
+void Executor::setMaxTableCacheSize(uint64_t bytes) {
+    if (tableCache_) {
+        tableCache_->setMaxTableSize(bytes);
+        LOG_INFO(QString("Max table cache size set to %1 bytes").arg(bytes));
+    }
+}
+
+Executor::TableCacheStats Executor::getTableCacheStats() const {
+    TableCacheStats stats{};
+    if (tableCache_) {
+        auto tcStats = tableCache_->getStatistics();
+        stats.totalCachedTables = tcStats.totalCachedTables;
+        stats.totalMemoryBytes = tcStats.totalMemoryBytes;
+        stats.cacheHits = tcStats.cacheHits;
+        stats.cacheMisses = tcStats.cacheMisses;
+        stats.invalidations = tcStats.invalidations;
+        stats.hitRate = tcStats.hitRate;
+    }
+    return stats;
 }
 
 

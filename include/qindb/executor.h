@@ -20,6 +20,7 @@ namespace qindb {
 class QueryRewriter;
 class PermissionManager;
 class QueryCache;
+class TableCache;
 // CBO forward declarations
 struct PlanNode;
 
@@ -248,6 +249,35 @@ public:
     };
     QueryCacheStats getQueryCacheStats() const;
 
+    /**
+     * @brief 启用/禁用表级内存缓存
+     */
+    void setTableCacheEnabled(bool enabled);
+
+    /**
+     * @brief 清空表级缓存
+     */
+    void clearTableCache();
+
+    /**
+     * @brief 设置可缓存的最大单表大小
+     * @param bytes 字节数（默认5MB）
+     */
+    void setMaxTableCacheSize(uint64_t bytes);
+
+    /**
+     * @brief 获取表级缓存统计信息
+     */
+    struct TableCacheStats {
+        uint64_t totalCachedTables;
+        uint64_t totalMemoryBytes;
+        uint64_t cacheHits;
+        uint64_t cacheMisses;
+        uint64_t invalidations;
+        double hitRate;
+    };
+    TableCacheStats getTableCacheStats() const;
+
 private:
     /**
      * @brief 将AST数据类型转换为内部DataType
@@ -283,6 +313,7 @@ private:
     std::unique_ptr<QueryRewriter> queryRewriter_;  // 查询重写器
     bool queryRewriteEnabled_ = true;       // 是否启用查询重写
     std::unique_ptr<QueryCache> queryCache_;   // 查询缓存
+    std::unique_ptr<TableCache> tableCache_;   // 表级内存缓存
 };
 
 } // namespace qindb

@@ -1,9 +1,13 @@
 #include "qindb/server.h"
 #include "qindb/client_connection.h"
 #include "qindb/database_manager.h"
+#include "qindb/tls_config.h"
+#include "qindb/tls_socket_factory.h"
 #include "qindb/logger.h"
 #include <QtNetwork/QHostAddress>
 #include <QtNetwork/QTcpSocket>
+#include <QtNetwork/QSslSocket>
+#include <QFile>
 
 namespace qindb {
 
@@ -13,7 +17,8 @@ Server::Server(DatabaseManager* dbManager, AuthManager* authManager, QObject* pa
     , dbManager_(dbManager)
     , authManager_(authManager)
     , maxConnections_(1000)
-    , whitelistEnabled_(false) {
+    , whitelistEnabled_(false)
+    , sslEnabled_(false) {
 
     // 连接信号槽
     connect(tcpServer_, &QTcpServer::newConnection, this, &Server::onNewConnection);
@@ -82,6 +87,61 @@ int Server::connectionCount() const {
 void Server::setMaxConnections(int maxConnections) {
     maxConnections_ = maxConnections;
     LOG_INFO(QString("Max connections set to %1").arg(maxConnections_));
+}
+
+bool Server::enableTLS(const QString& certPath, const QString& keyPath, bool autoGenerate) {
+    LOG_INFO(QString("Configuring TLS: cert=%1, key=%2, autoGenerate=%3")
+                .arg(certPath).arg(keyPath).arg(autoGenerate));
+
+    // 创建TLS配置
+    tlsConfig_ = std::make_unique<TLSConfig>();
+    tlsConfig_->setAllowSelfSigned(true);
+    tlsConfig_->setVerifyMode(TLSVerifyMode::NONE);
+
+    // 检查证书和密钥文件是否存在
+    bool certExists = QFile::exists(certPath);
+    bool keyExists = QFile::exists(keyPath);
+
+    if (certExists && keyExists) {
+        // 加载现有证书和私钥
+        if (!tlsConfig_->loadFromFiles(certPath, keyPath)) {
+            LOG_ERROR("Failed to load TLS configuration from files");
+            tlsConfig_.reset();
+            return false;
+        }
+        LOG_INFO(QString("Loaded TLS certificate (fingerprint: %1)")
+            .arg(tlsConfig_->certificateFingerprint()));
+    } else if (autoGenerate) {
+        // 生成自签名证书
+        LOG_INFO("Certificate or key file not found, generating self-signed certificate...");
+
+        if (!tlsConfig_->generateSelfSigned("QinDB Server", "QinDB", 365)) {
+            LOG_ERROR("Failed to generate self-signed certificate");
+            tlsConfig_.reset();
+            return false;
+        }
+
+        // 保存证书和私钥
+        if (!tlsConfig_->saveToFiles(certPath, keyPath)) {
+            LOG_ERROR("Failed to save generated certificate");
+            tlsConfig_.reset();
+            return false;
+        }
+
+        LOG_INFO(QString("Self-signed certificate generated and saved (fingerprint: %1)")
+            .arg(tlsConfig_->certificateFingerprint()));
+    } else {
+        LOG_ERROR("Certificate or key file not found and autoGenerate=false");
+        tlsConfig_.reset();
+        return false;
+    }
+
+    // 创建TLS socket工厂
+    tlsSocketFactory_ = std::make_unique<TLSSocketFactory>(*tlsConfig_);
+
+    sslEnabled_ = true;
+    LOG_INFO("TLS enabled successfully");
+    return true;
 }
 
 // ========== IP 白名单管理 ==========
@@ -179,13 +239,54 @@ bool Server::isIPWhitelisted(const QString& ip) const {
 
 void Server::onNewConnection() {
     while (tcpServer_->hasPendingConnections()) {
-        QTcpSocket* socket = tcpServer_->nextPendingConnection();
+        QTcpSocket* rawSocket = tcpServer_->nextPendingConnection();
+        QTcpSocket* socket = rawSocket;
+
+        // 如果启用TLS,升级为SSL socket
+        if (sslEnabled_ && tlsSocketFactory_) {
+            QSslSocket* sslSocket = tlsSocketFactory_->createServerSocket(rawSocket);
+            if (!sslSocket) {
+                LOG_ERROR("Failed to create SSL socket");
+                rawSocket->deleteLater();
+                continue;
+            }
+
+            // 使rawSocket成为sslSocket的子对象,这样当sslSocket被删除时rawSocket也会被删除
+            rawSocket->setParent(sslSocket);
+
+            QString clientIP = sslSocket->peerAddress().toString();
+            QString clientAddress = QString("%1:%2")
+                                       .arg(clientIP)
+                                       .arg(sslSocket->peerPort());
+
+            LOG_INFO(QString("Incoming TLS connection from %1")
+                        .arg(clientAddress));
+
+            // 检查是否可以接受新连接
+            if (!canAcceptConnection(clientIP)) {
+                LOG_WARN(QString("Connection rejected from %1 (whitelist/limit)").arg(clientAddress));
+                sslSocket->disconnectFromHost();
+                sslSocket->deleteLater();
+                continue;
+            }
+
+            // 启动服务器加密 - 在创建ClientConnection之前
+            sslSocket->startServerEncryption();
+            LOG_INFO(QString("Started TLS handshake for %1").arg(clientAddress));
+
+            // 立即创建ClientConnection，让它处理TLS握手过程
+            // ClientConnection会在构造函数中设置socket的parent，确保socket不会被过早删除
+            socket = sslSocket;  // 使用SSL socket而不是原始socket
+        }
+
+        // 非TLS连接的处理
         QString clientIP = socket->peerAddress().toString();
         QString clientAddress = QString("%1:%2")
                                    .arg(clientIP)
                                    .arg(socket->peerPort());
 
-        LOG_INFO(QString("Incoming connection from %1").arg(clientAddress));
+        LOG_INFO(QString("Incoming TCP connection from %1")
+                    .arg(clientAddress));
 
         // 检查是否可以接受新连接
         if (!canAcceptConnection(clientIP)) {
@@ -195,7 +296,7 @@ void Server::onNewConnection() {
             continue;
         }
 
-        // 创建客户端连接对象(直接传递socket对象)
+        // 创建客户端连接对象
         ClientConnection* connection = new ClientConnection(
             socket,
             dbManager_,
@@ -211,12 +312,10 @@ void Server::onNewConnection() {
 
         emit clientConnected(clientAddress);
 
-        LOG_INFO(QString("Client connected: %1 (total: %2/%3)")
+        LOG_INFO(QString("Client connected: %1 (total: %2/%3, plain TCP)")
                     .arg(clientAddress)
                     .arg(connections_.size())
                     .arg(maxConnections_));
-
-        // 注意: socket现在由ClientConnection管理,不要在这里删除
     }
 }
 

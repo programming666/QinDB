@@ -25,9 +25,24 @@ DatabaseManager::DatabaseManager(const QString& dataDir)
 }
 
 DatabaseManager::~DatabaseManager() {
-    // 保存状态并关闭所有数据库
+    LOG_INFO("DatabaseManager destructor called, starting cleanup...");
+    // 关闭所有数据库（刷新缓冲池和WAL）
+    QVector<QString> dbNames;
+    for (auto it = m_databases.begin(); it != m_databases.end(); ++it) {
+        dbNames.append(it->first);
+    }
+
+    for (const QString& dbName : dbNames) {
+        closeDatabase(dbName);
+    }
+
+    // 保存数据库管理器状态
     saveToDisk();
+
+    // 清空数据库列表
     m_databases.clear();
+
+    LOG_INFO("DatabaseManager destroyed, all databases closed and flushed");
 }
 
 bool DatabaseManager::createDatabase(const QString& dbName, bool ifNotExists) {
@@ -504,20 +519,27 @@ bool DatabaseManager::loadDatabase(const QString& dbName) {
 }
 
 void DatabaseManager::closeDatabase(const QString& dbName) {
+    LOG_INFO(QString("Closing database '%1'...").arg(dbName));
     auto it = m_databases.find(dbName);
     if (it != m_databases.end()) {
         // 保存Catalog（根据配置自动选择模式）
+        LOG_INFO(QString("Saving catalog for database '%1'...").arg(dbName));
         QString catalogPath = it->second->path + "/" + Config::instance().getCatalogFilePath();
         it->second->catalog->save(catalogPath);  // 使用 save() 而不是 saveToDisk()
+        LOG_INFO(QString("Catalog saved for database '%1'").arg(dbName));
 
         // 刷新缓冲池
         if (it->second->bufferPool) {
+            LOG_INFO(QString("Flushing buffer pool for database '%1'...").arg(dbName));
             it->second->bufferPool->flushAllPages();
+            LOG_INFO(QString("Buffer pool flushed for database '%1'").arg(dbName));
         }
 
         // 刷新WAL
         if (it->second->walManager) {
+            LOG_INFO(QString("Flushing WAL for database '%1'...").arg(dbName));
             it->second->walManager->flush();
+            LOG_INFO(QString("WAL flushed for database '%1'").arg(dbName));
         }
 
         LOG_INFO(QString("Closed database '%1'").arg(dbName));

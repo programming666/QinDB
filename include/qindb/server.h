@@ -12,12 +12,15 @@ namespace qindb {
 class DatabaseManager;
 class AuthManager;
 class ClientConnection;
+class TLSConfig;
+class TLSSocketFactory;
 
 /**
  * @brief qinDB TCP/IP 服务器
  *
  * 负责监听客户端连接，为每个连接创建 ClientConnection 对象。
  * 支持并发连接管理、IP 白名单、连接限制等功能。
+ * 支持TLS加密连接。
  */
 class Server : public QObject {
     Q_OBJECT
@@ -64,6 +67,20 @@ public:
      * @brief 获取最大连接数
      */
     int maxConnections() const { return maxConnections_; }
+
+    /**
+     * @brief 启用TLS支持
+     * @param certPath 证书文件路径
+     * @param keyPath 私钥文件路径
+     * @param autoGenerate 如果证书不存在，是否自动生成
+     * @return 是否成功启用TLS
+     */
+    bool enableTLS(const QString& certPath, const QString& keyPath, bool autoGenerate = true);
+
+    /**
+     * @brief 检查是否启用了TLS
+     */
+    bool isTLSEnabled() const { return sslEnabled_; }
 
     /**
      * @brief 添加 IP 白名单
@@ -127,6 +144,11 @@ private:
     int maxConnections_;                             // 最大连接数
     QSet<QString> ipWhitelist_;                      // IP 白名单（CIDR 格式）
     bool whitelistEnabled_;                          // 是否启用白名单
+
+    // TLS/SSL 支持
+    bool sslEnabled_;                                // 是否启用SSL
+    std::unique_ptr<TLSConfig> tlsConfig_;           // TLS配置
+    std::unique_ptr<TLSSocketFactory> tlsSocketFactory_;  // TLS socket工厂
 };
 
 } // namespace qindb

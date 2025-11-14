@@ -8,6 +8,7 @@
 #include <QCoreApplication>
 #include <iostream>
 #include <QFile>
+#include <QDir>
 
 using namespace qindb;
 using namespace qindb::test;
@@ -43,9 +44,15 @@ private:
     TestContext createTestContext() {
         TestContext ctx;
 
-        QString dbDir = "test_executor_db";
-        QFile::remove(dbDir + "/catalog.json");
-        QFile::remove(dbDir + "/data.db");
+        static int dbCounter = 0;  // 为每个测试创建独立的数据库
+        QString dbDir = QString("test_executor_db_%1").arg(dbCounter++);
+
+        // 彻底清理测试数据库目录
+        QDir dir(dbDir);
+        if (dir.exists()) {
+            dir.removeRecursively();
+        }
+        dir.mkpath(".");
 
         ctx.dbManager = std::make_unique<DatabaseManager>(dbDir);
 
@@ -69,7 +76,9 @@ private:
 
             QueryResult result = ctx.executor->execute(ast);
             assertTrue(result.success, "CREATE TABLE should succeed");
-            assertTrue(result.message.contains("Table created"), "Should contain success message");
+            // 检查消息包含表名和created关键字
+            assertTrue(result.message.contains("users") && result.message.contains("created"),
+                      "Should contain table name and success indicator");
 
             addResult("testExecuteCreateTable", true, "Execute CREATE TABLE works", stopTimer());
         } catch (const std::exception& e) {

@@ -22,13 +22,19 @@ QueryCache::QueryCache(uint64_t maxEntries, uint64_t maxMemoryMB, uint64_t ttlSe
 }
 
 QueryCache::~QueryCache() {
-    QMutexLocker locker(&mutex_);
-    Statistics stats = getStatistics();
+    // 析构时不需要加锁,因为没有其他线程会访问
+    // 直接读取统计信息,避免调用getStatistics()导致递归锁定
+    uint64_t totalAccesses = totalHits_ + totalMisses_;
+    double hitRate = 0.0;
+    if (totalAccesses > 0) {
+        hitRate = static_cast<double>(totalHits_) / static_cast<double>(totalAccesses);
+    }
+
     LOG_INFO(QString("QueryCache destroyed: entries=%1, hits=%2, misses=%3, hitRate=%4%%")
-                .arg(stats.totalEntries)
-                .arg(stats.totalHits)
-                .arg(stats.totalMisses)
-                .arg(stats.hitRate * 100.0, 0, 'f', 2));
+                .arg(cache_.size())
+                .arg(totalHits_)
+                .arg(totalMisses_)
+                .arg(hitRate * 100.0, 0, 'f', 2));
 }
 
 bool QueryCache::get(const QString& querySql, QueryResult& result) {
@@ -136,8 +142,12 @@ bool QueryCache::put(const QString& querySql,
     }
 
     // 检查是否需要驱逐（条目数限制）
-    if (cache_.size() >= static_cast<int>(maxEntries_)) {
+    // 需要在添加新条目前确保有空间
+    while (cache_.size() >= static_cast<int>(maxEntries_)) {
         int evicted = evictLRU();
+        if (evicted == 0) {
+            break;  // 无法继续驱逐
+        }
         LOG_INFO(QString("Evicted %1 LRU entries (max entries reached)").arg(evicted));
     }
 
@@ -262,7 +272,7 @@ void QueryCache::clear() {
 }
 
 QueryCache::Statistics QueryCache::getStatistics() const {
-    // 注意：调用者已持有锁（在 get/put 中调用）或需要在外部加锁
+    QMutexLocker locker(&mutex_);  // 确保线程安全
     Statistics stats;
     stats.totalEntries = cache_.size();
     stats.totalHits = totalHits_;

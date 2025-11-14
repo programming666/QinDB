@@ -1,6 +1,8 @@
 #include "qindb/client_manager.h"
+#include "qindb/certificate_generator.h"
 #include "qindb/logger.h"
 #include <QtNetwork/QTcpSocket>
+#include <QtNetwork/QSslSocket>
 #include <QtCore/QTimer>
 #include <QtCore/QDateTime>
 
@@ -13,7 +15,8 @@ ClientManager::ClientManager(QObject* parent)
     , isAuthenticated_(false)
     , heartbeatTimer_(nullptr)
     , heartbeatInterval_(30000)  // 30秒心跳间隔
-    , lastActivityTime_(0) {
+    , lastActivityTime_(0)
+    , fingerprintManager_(std::make_unique<FingerprintManager>()) {
 }
 
 ClientManager::~ClientManager() {
@@ -29,20 +32,44 @@ bool ClientManager::connectToServer(const ConnectionParams& params) {
 
     connectionParams_ = params;
 
-    // 创建TCP套接字
-    socket_ = new QTcpSocket(this);
+    // 根据是否启用SSL创建相应的套接字
+    if (params.sslEnabled) {
+        LOG_INFO("Creating SSL socket for secure connection");
+        QSslSocket* sslSocket = new QSslSocket(this);
 
-    // 连接信号槽
+        // Configure SSL socket
+        sslSocket->setPeerVerifyMode(QSslSocket::VerifyNone);  // We use fingerprint verification instead
+        sslSocket->setProtocol(QSsl::TlsV1_2OrLater);
+
+        // Connect SSL-specific signals
+        connect(sslSocket, &QSslSocket::encrypted, this, &ClientManager::onEncrypted);
+        connect(sslSocket, &QSslSocket::sslErrors, this, &ClientManager::onSslErrors);
+
+        socket_ = sslSocket;
+    } else {
+        LOG_INFO("Creating standard TCP socket");
+        socket_ = new QTcpSocket(this);
+    }
+
+    // 连接通用信号槽
     connect(socket_, &QTcpSocket::connected, this, &ClientManager::onConnected);
     connect(socket_, &QTcpSocket::disconnected, this, &ClientManager::onDisconnected);
     connect(socket_, &QTcpSocket::readyRead, this, &ClientManager::onReadyRead);
     connect(socket_, &QTcpSocket::errorOccurred, this, &ClientManager::onError);
 
     // 更新连接状态
-    updateConnectionStatus(QString("正在连接到 %1:%2...").arg(params.host).arg(params.port));
+    updateConnectionStatus(QString("正在连接到 %1:%2%3...")
+                              .arg(params.host)
+                              .arg(params.port)
+                              .arg(params.sslEnabled ? " (TLS)" : ""));
 
     // 连接到服务器
-    socket_->connectToHost(params.host, params.port);
+    if (params.sslEnabled) {
+        QSslSocket* sslSocket = qobject_cast<QSslSocket*>(socket_);
+        sslSocket->connectToHostEncrypted(params.host, params.port);
+    } else {
+        socket_->connectToHost(params.host, params.port);
+    }
 
     // 等待连接建立（5秒超时）
     if (!socket_->waitForConnected(5000)) {
@@ -50,6 +77,17 @@ bool ClientManager::connectToServer(const ConnectionParams& params) {
         updateConnectionStatus(QString("连接失败: %1").arg(errorMsg));
         emit error(errorMsg);
         return false;
+    }
+
+    // 如果是SSL连接，等待加密建立（额外5秒）
+    if (params.sslEnabled) {
+        QSslSocket* sslSocket = qobject_cast<QSslSocket*>(socket_);
+        if (!sslSocket->waitForEncrypted(5000)) {
+            QString errorMsg = QString("TLS握手失败: %1").arg(sslSocket->errorString());
+            updateConnectionStatus(errorMsg);
+            emit sslError(errorMsg);
+            return false;
+        }
     }
 
     // 初始化心跳定时器
@@ -329,6 +367,112 @@ void ClientManager::sendHeartbeat() {
 void ClientManager::updateConnectionStatus(const QString& status) {
     emit connectionStatusChanged(status);
     LOG_INFO(QString("Client status: %1").arg(status));
+}
+
+void ClientManager::setFingerprintConfirmationCallback(FingerprintManager::ConfirmationCallback callback) {
+    if (fingerprintManager_) {
+        fingerprintManager_->setConfirmationCallback(callback);
+    }
+}
+
+void ClientManager::onEncrypted() {
+    QSslSocket* sslSocket = qobject_cast<QSslSocket*>(socket_);
+    if (!sslSocket) {
+        return;
+    }
+
+    LOG_INFO("TLS handshake completed successfully");
+
+    // Verify server certificate fingerprint
+    QSslCertificate peerCert = sslSocket->peerCertificate();
+    if (peerCert.isNull()) {
+        QString errorMsg = "Server did not provide a certificate";
+        LOG_ERROR(errorMsg);
+        emit sslError(errorMsg);
+        disconnectFromServer();
+        return;
+    }
+
+    // Verify fingerprint using FingerprintManager
+    FingerprintStatus status = fingerprintManager_->verifyFingerprint(
+        connectionParams_.host,
+        connectionParams_.port,
+        peerCert
+    );
+
+    switch (status) {
+    case FingerprintStatus::TRUSTED:
+        LOG_INFO("Server certificate fingerprint verified and trusted");
+        updateConnectionStatus(QString("TLS连接已建立并验证"));
+        // Continue with normal connection flow
+        break;
+
+    case FingerprintStatus::MISMATCH:
+        {
+            QString errorMsg = QString("警告: 服务器指纹不匹配！可能遭到中间人攻击！\n"
+                                     "服务器: %1:%2")
+                                .arg(connectionParams_.host)
+                                .arg(connectionParams_.port);
+            LOG_ERROR(errorMsg);
+            emit sslError(errorMsg);
+            disconnectFromServer();
+        }
+        break;
+
+    case FingerprintStatus::UNKNOWN:
+        {
+            QString errorMsg = QString("服务器指纹未知，连接被拒绝\n"
+                                     "服务器: %1:%2")
+                                .arg(connectionParams_.host)
+                                .arg(connectionParams_.port);
+            LOG_WARN(errorMsg);
+            emit sslError(errorMsg);
+            disconnectFromServer();
+        }
+        break;
+
+    case FingerprintStatus::ERROR:
+        {
+            QString errorMsg = "指纹验证过程中发生错误";
+            LOG_ERROR(errorMsg);
+            emit sslError(errorMsg);
+            disconnectFromServer();
+        }
+        break;
+    }
+}
+
+void ClientManager::onSslErrors(const QList<QSslError>& errors) {
+    // Log all SSL errors
+    for (const QSslError& error : errors) {
+        LOG_WARN(QString("SSL error: %1").arg(error.errorString()));
+    }
+
+    // We ignore Qt's built-in SSL verification errors because we use fingerprint verification
+    // However, we still want to be aware of critical errors
+    QSslSocket* sslSocket = qobject_cast<QSslSocket*>(socket_);
+    if (sslSocket) {
+        // Ignore expected errors related to self-signed certificates
+        bool hasCriticalError = false;
+        for (const QSslError& error : errors) {
+            if (error.error() != QSslError::SelfSignedCertificate &&
+                error.error() != QSslError::SelfSignedCertificateInChain &&
+                error.error() != QSslError::CertificateUntrusted &&
+                error.error() != QSslError::HostNameMismatch) {
+                hasCriticalError = true;
+                break;
+            }
+        }
+
+        if (!hasCriticalError) {
+            // Ignore non-critical errors (we use fingerprint verification)
+            sslSocket->ignoreSslErrors(errors);
+        } else {
+            QString errorMsg = QString("严重的TLS错误: %1").arg(errors.first().errorString());
+            LOG_ERROR(errorMsg);
+            emit sslError(errorMsg);
+        }
+    }
 }
 
 } // namespace qindb

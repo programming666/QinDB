@@ -36,8 +36,43 @@ bool TablePage::insertRecord(Page* page, const TableDef* tableDef, RowId rowId,
 
     // 检查是否有足够空间
     PageHeader* header = page->getHeader();
+
+    // 验证页头数据有效性
+    if (header->freeSpaceOffset > PAGE_SIZE) {
+        LOG_ERROR(QString("Page %1 has corrupted freeSpaceOffset: %2 (page size: %3)")
+                     .arg(page->getPageId())
+                     .arg(header->freeSpaceOffset)
+                     .arg(PAGE_SIZE));
+        return false;
+    }
+
+    if (header->slotCount > (PAGE_SIZE - sizeof(PageHeader)) / sizeof(Slot)) {
+        LOG_ERROR(QString("Page %1 has corrupted slotCount: %2")
+                     .arg(page->getPageId())
+                     .arg(header->slotCount));
+        return false;
+    }
+
     uint16_t slotsEndOffset = sizeof(PageHeader) + (header->slotCount + 1) * sizeof(Slot);
-    uint16_t availableSpace = PAGE_SIZE - slotsEndOffset - (PAGE_SIZE - header->freeSpaceOffset);
+
+    // 验证slots区域不会超出页面边界
+    if (slotsEndOffset > PAGE_SIZE) {
+        LOG_ERROR(QString("Page %1 slot array would exceed page boundary: slotsEndOffset=%2")
+                     .arg(page->getPageId())
+                     .arg(slotsEndOffset));
+        return false;
+    }
+
+    // 验证freeSpaceOffset在有效范围内
+    if (header->freeSpaceOffset < slotsEndOffset) {
+        LOG_ERROR(QString("Page %1 has invalid freeSpaceOffset: %2 < slotsEndOffset: %3")
+                     .arg(page->getPageId())
+                     .arg(header->freeSpaceOffset)
+                     .arg(slotsEndOffset));
+        return false;
+    }
+
+    uint16_t availableSpace = header->freeSpaceOffset - slotsEndOffset;
 
     if (availableSpace < requiredSpace) {
         LOG_DEBUG(QString("Page %1 does not have enough space: available=%2, required=%3")
@@ -49,6 +84,15 @@ bool TablePage::insertRecord(Page* page, const TableDef* tableDef, RowId rowId,
 
     // 找到记录的存储位置（从后向前）
     uint16_t recordOffset = header->freeSpaceOffset - recordSize;
+
+    // 验证recordOffset在有效范围内
+    if (recordOffset < slotsEndOffset || recordOffset + recordSize > PAGE_SIZE) {
+        LOG_ERROR(QString("Page %1 calculated recordOffset is invalid: offset=%2, size=%3")
+                     .arg(page->getPageId())
+                     .arg(recordOffset)
+                     .arg(recordSize));
+        return false;
+    }
 
     // 写入记录数据
     memcpy(page->getData() + recordOffset, recordData.constData(), recordSize);
@@ -186,12 +230,34 @@ bool TablePage::getAllRecords(Page* page, const TableDef* tableDef,
     }
 
     Slot* slotArray = getSlotArray(page);
+    const size_t pageSize = PAGE_SIZE;
+    const size_t minRecordSize = sizeof(RecordHeader);
 
     for (uint16_t i = 0; i < header->slotCount; ++i) {
         const Slot& slot = slotArray[i];
 
         if (slot.length == 0) {
             continue; // 空槽位（已删除的记录）
+        }
+
+        // 边界检查1: 验证slot.offset和slot.length是否在页面范围内
+        if (slot.offset >= pageSize) {
+            LOG_ERROR(QString("Invalid slot offset %1 (page size: %2) at slot %3")
+                .arg(slot.offset).arg(pageSize).arg(i));
+            continue;
+        }
+
+        if (slot.offset + slot.length > pageSize) {
+            LOG_ERROR(QString("Slot data exceeds page boundary (offset: %1, length: %2, page size: %3) at slot %4")
+                .arg(slot.offset).arg(slot.length).arg(pageSize).arg(i));
+            continue;
+        }
+
+        // 边界检查2: 验证长度是否至少包含RecordHeader
+        if (slot.length < minRecordSize) {
+            LOG_ERROR(QString("Slot length %1 is too small for RecordHeader (min: %2) at slot %3")
+                .arg(slot.length).arg(minRecordSize).arg(i));
+            continue;
         }
 
         const char* recordData = page->getData() + slot.offset;
@@ -207,24 +273,54 @@ bool TablePage::getAllRecords(Page* page, const TableDef* tableDef,
             continue;
         }
 
+        // 检查stream状态
+        if (stream.status() != QDataStream::Ok) {
+            LOG_ERROR(QString("Stream error after reading header from slot %1 (status: %2)")
+                .arg(i).arg(stream.status()));
+            continue;
+        }
+
         // 注意：不在这里过滤已删除的记录，让调用者通过VisibilityChecker判断
         // 这样可以支持MVCC可见性检查
 
         // 反序列化记录 - 跳过 deleteTxnId 检查
         QVector<QVariant> row;
+        bool deserializationSuccess = true;
+
         for (int j = 0; j < tableDef->columns.size(); ++j) {
-            QVariant value;
-            if (!deserializeField(tableDef->columns[j], value, stream)) {
-                LOG_ERROR(QString("Failed to deserialize field %1").arg(tableDef->columns[j].name));
-                row.clear();
+            // 检查stream是否还有数据可读
+            if (stream.atEnd() && j < tableDef->columns.size()) {
+                LOG_ERROR(QString("Stream reached end prematurely at field %1/%2 in slot %3")
+                    .arg(j).arg(tableDef->columns.size()).arg(i));
+                deserializationSuccess = false;
                 break;
             }
+
+            QVariant value;
+            if (!deserializeField(tableDef->columns[j], value, stream)) {
+                LOG_ERROR(QString("Failed to deserialize field %1 (%2) from slot %3")
+                    .arg(j).arg(tableDef->columns[j].name).arg(i));
+                deserializationSuccess = false;
+                break;
+            }
+
+            // 检查stream状态
+            if (stream.status() != QDataStream::Ok) {
+                LOG_ERROR(QString("Stream error after reading field %1 from slot %2 (status: %3)")
+                    .arg(tableDef->columns[j].name).arg(i).arg(stream.status()));
+                deserializationSuccess = false;
+                break;
+            }
+
             row.append(value);
         }
 
-        if (!row.isEmpty()) {
+        if (deserializationSuccess && row.size() == tableDef->columns.size()) {
             records.append(row);
             headers.append(recordHeader);
+        } else {
+            LOG_WARN(QString("Skipping corrupted record at slot %1 (expected %2 fields, got %3)")
+                .arg(i).arg(tableDef->columns.size()).arg(row.size()));
         }
     }
 
@@ -414,9 +510,26 @@ bool TablePage::serializeField(const ColumnDef& colDef, const QVariant& value,
 
 bool TablePage::deserializeField(const ColumnDef& colDef, QVariant& value,
                                 QDataStream& stream) {
+    // 检查stream状态
+    if (stream.status() != QDataStream::Ok) {
+        LOG_ERROR(QString("Stream is in error state before deserializing field %1").arg(colDef.name));
+        return false;
+    }
+
+    // 检查是否还有数据可读
+    if (stream.atEnd()) {
+        LOG_ERROR(QString("Stream ended before deserializing field %1").arg(colDef.name));
+        return false;
+    }
+
     // 读取NULL标志位
     bool isNull;
     stream >> isNull;
+
+    if (stream.status() != QDataStream::Ok) {
+        LOG_ERROR(QString("Failed to read NULL flag for field %1").arg(colDef.name));
+        return false;
+    }
 
     if (isNull) {
         value = QVariant();
@@ -427,6 +540,10 @@ bool TablePage::deserializeField(const ColumnDef& colDef, QVariant& value,
         case DataType::INT: {
             qint32 v;
             stream >> v;
+            if (stream.status() != QDataStream::Ok) {
+                LOG_ERROR(QString("Failed to read INT value for field %1").arg(colDef.name));
+                return false;
+            }
             value = v;
             break;
         }
@@ -434,6 +551,10 @@ bool TablePage::deserializeField(const ColumnDef& colDef, QVariant& value,
         case DataType::BIGINT: {
             qint64 v;
             stream >> v;
+            if (stream.status() != QDataStream::Ok) {
+                LOG_ERROR(QString("Failed to read BIGINT value for field %1").arg(colDef.name));
+                return false;
+            }
             value = v;
             break;
         }
@@ -441,6 +562,10 @@ bool TablePage::deserializeField(const ColumnDef& colDef, QVariant& value,
         case DataType::FLOAT: {
             float v;
             stream >> v;
+            if (stream.status() != QDataStream::Ok) {
+                LOG_ERROR(QString("Failed to read FLOAT value for field %1").arg(colDef.name));
+                return false;
+            }
             value = v;
             break;
         }
@@ -448,6 +573,10 @@ bool TablePage::deserializeField(const ColumnDef& colDef, QVariant& value,
         case DataType::DOUBLE: {
             double v;
             stream >> v;
+            if (stream.status() != QDataStream::Ok) {
+                LOG_ERROR(QString("Failed to read DOUBLE value for field %1").arg(colDef.name));
+                return false;
+            }
             value = v;
             break;
         }
@@ -455,6 +584,10 @@ bool TablePage::deserializeField(const ColumnDef& colDef, QVariant& value,
         case DataType::BOOLEAN: {
             bool v;
             stream >> v;
+            if (stream.status() != QDataStream::Ok) {
+                LOG_ERROR(QString("Failed to read BOOLEAN value for field %1").arg(colDef.name));
+                return false;
+            }
             value = v;
             break;
         }
@@ -464,6 +597,10 @@ bool TablePage::deserializeField(const ColumnDef& colDef, QVariant& value,
         case DataType::TEXT: {
             QString v;
             stream >> v;
+            if (stream.status() != QDataStream::Ok) {
+                LOG_ERROR(QString("Failed to read STRING value for field %1").arg(colDef.name));
+                return false;
+            }
             // 对于CHAR，去除尾部空格
             if (colDef.type == DataType::CHAR) {
                 v = v.trimmed();
@@ -477,6 +614,10 @@ bool TablePage::deserializeField(const ColumnDef& colDef, QVariant& value,
         case DataType::DATETIME: {
             QString v;
             stream >> v;
+            if (stream.status() != QDataStream::Ok) {
+                LOG_ERROR(QString("Failed to read DATETIME value for field %1").arg(colDef.name));
+                return false;
+            }
             value = v;
             break;
         }
@@ -484,6 +625,10 @@ bool TablePage::deserializeField(const ColumnDef& colDef, QVariant& value,
         case DataType::DECIMAL: {
             QString v;
             stream >> v;
+            if (stream.status() != QDataStream::Ok) {
+                LOG_ERROR(QString("Failed to read DECIMAL value for field %1").arg(colDef.name));
+                return false;
+            }
             value = v;
             break;
         }
@@ -491,12 +636,17 @@ bool TablePage::deserializeField(const ColumnDef& colDef, QVariant& value,
         case DataType::BLOB: {
             QByteArray v;
             stream >> v;
+            if (stream.status() != QDataStream::Ok) {
+                LOG_ERROR(QString("Failed to read BLOB value for field %1").arg(colDef.name));
+                return false;
+            }
             value = v;
             break;
         }
 
         default:
-            LOG_ERROR(QString("Unsupported data type: %1").arg(static_cast<int>(colDef.type)));
+            LOG_ERROR(QString("Unsupported data type: %1 for field %2")
+                .arg(static_cast<int>(colDef.type)).arg(colDef.name));
             return false;
     }
 
@@ -675,9 +825,43 @@ bool TablePage::insertTuple(Page* page, const QByteArray& data, RowId* rowId) {
     uint16_t recordSize = static_cast<uint16_t>(data.size());
     uint16_t requiredSpace = recordSize + sizeof(Slot);
 
+    // 验证页头数据有效性
+    if (header->freeSpaceOffset > PAGE_SIZE) {
+        LOG_ERROR(QString("Page %1 has corrupted freeSpaceOffset: %2 (page size: %3)")
+                     .arg(page->getPageId())
+                     .arg(header->freeSpaceOffset)
+                     .arg(PAGE_SIZE));
+        return false;
+    }
+
+    if (header->slotCount > (PAGE_SIZE - sizeof(PageHeader)) / sizeof(Slot)) {
+        LOG_ERROR(QString("Page %1 has corrupted slotCount: %2")
+                     .arg(page->getPageId())
+                     .arg(header->slotCount));
+        return false;
+    }
+
     // 检查空间
     uint16_t slotsEndOffset = sizeof(PageHeader) + (header->slotCount + 1) * sizeof(Slot);
-    uint16_t availableSpace = PAGE_SIZE - slotsEndOffset - (PAGE_SIZE - header->freeSpaceOffset);
+
+    // 验证slots区域不会超出页面边界
+    if (slotsEndOffset > PAGE_SIZE) {
+        LOG_ERROR(QString("Page %1 slot array would exceed page boundary: slotsEndOffset=%2")
+                     .arg(page->getPageId())
+                     .arg(slotsEndOffset));
+        return false;
+    }
+
+    // 验证freeSpaceOffset在有效范围内
+    if (header->freeSpaceOffset < slotsEndOffset) {
+        LOG_ERROR(QString("Page %1 has invalid freeSpaceOffset: %2 < slotsEndOffset: %3")
+                     .arg(page->getPageId())
+                     .arg(header->freeSpaceOffset)
+                     .arg(slotsEndOffset));
+        return false;
+    }
+
+    uint16_t availableSpace = header->freeSpaceOffset - slotsEndOffset;
 
     if (availableSpace < requiredSpace) {
         LOG_DEBUG(QString("Page %1 does not have enough space for raw tuple: available=%2, required=%3")
@@ -689,6 +873,15 @@ bool TablePage::insertTuple(Page* page, const QByteArray& data, RowId* rowId) {
 
     // 计算记录偏移（从后向前）
     uint16_t recordOffset = header->freeSpaceOffset - recordSize;
+
+    // 验证recordOffset在有效范围内
+    if (recordOffset < slotsEndOffset || recordOffset + recordSize > PAGE_SIZE) {
+        LOG_ERROR(QString("Page %1 calculated recordOffset is invalid: offset=%2, size=%3")
+                     .arg(page->getPageId())
+                     .arg(recordOffset)
+                     .arg(recordSize));
+        return false;
+    }
 
     // 写入数据
     memcpy(page->getData() + recordOffset, data.constData(), recordSize);

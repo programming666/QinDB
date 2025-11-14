@@ -5,3 +5,5 @@ build/
 *.log
 *.wal   
 qindb.db/
+*.crt
+*.key

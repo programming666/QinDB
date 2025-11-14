@@ -164,6 +164,78 @@ HAVING COUNT(*) > 1;
 SELECT * FROM users ORDER BY created_at DESC LIMIT 10;
 ```
 
+### 6. 用户管理
+
+qinDB 提供了完整的用户管理系统，支持用户创建、密码修改、权限控制等功能。
+
+#### 默认管理员账户
+
+系统初始化时会自动创建默认管理员：
+- **用户名**: `admin`
+- **密码**: `admin` (首次使用后建议修改)
+
+#### 创建用户
+
+```sql
+-- 创建普通用户
+CREATE USER qin IDENTIFIED BY '123456';
+
+-- 创建管理员用户
+CREATE USER superuser IDENTIFIED BY 'strong_password' WITH ADMIN;
+```
+
+#### 修改密码
+
+```sql
+-- 修改用户密码
+ALTER USER admin IDENTIFIED BY 'new_secure_password';
+```
+
+#### 删除用户
+
+```sql
+-- 删除用户
+DROP USER qin;
+```
+
+**注意**: 不能删除最后一个管理员用户（系统保护机制）
+
+#### 查询用户信息
+
+```sql
+-- 切换到系统数据库
+USE qindb;
+
+-- 查看所有用户
+SELECT * FROM users;
+
+-- 查看管理员
+SELECT username, created_at FROM users WHERE is_admin = 1;
+
+-- 查看激活的用户
+SELECT username FROM users WHERE is_active = 1;
+```
+
+#### 权限管理
+
+```sql
+-- 授予用户对数据库的所有权限
+GRANT ALL ON database_name TO username;
+
+-- 授予查询权限
+GRANT SELECT ON database_name.table_name TO username;
+
+-- 撤销权限
+REVOKE ALL ON database_name FROM username;
+```
+
+#### 密码安全
+
+- **加密算法**: Argon2id (内存成本 65536 KB, 3 次迭代, 4 线程)
+- **密码强度**: 系统会对非管理员用户的密码进行强度检查
+- **最佳实践**: 建议使用至少 12 个字符，包含大小写字母、数字和特殊字符
+
+
 ## 配置说明
 
 qinDB 使用 `qindb.ini` 文件进行配置：
@@ -228,6 +300,12 @@ qinDB 支持以下 60+ 种数据类型的索引：
 - **字符串类型**: `VARCHAR`, `CHAR`, `TEXT`, `NVARCHAR`
 - **日期时间**: `DATE`, `TIMESTAMP`, `DATETIME`
 - **其他类型**: `BOOLEAN`, `JSON`, `UUID` 等
+
+
+### 特别提示：
+
+请不要强制停止数据库进程，这会导致数据库损坏！
+
 
 ## 开发指南
 

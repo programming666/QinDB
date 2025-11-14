@@ -181,7 +181,12 @@ QVariant ExpressionEvaluator::evaluateColumn(const ast::ColumnExpression* expr,
     }
 
     if (!table) {
-        setError("Cannot evaluate column reference without table context");
+        // 提供更友好的错误消息，特别是在 INSERT VALUES 等上下文中
+        QString columnName = expr->table.isEmpty() ? expr->column : expr->table + "." + expr->column;
+        setError(QString("Column reference '%1' is not allowed in this context. "
+                        "If you meant to insert a string value, please use quotes: '%2'")
+                    .arg(columnName)
+                    .arg(columnName));
         return QVariant();
     }
 

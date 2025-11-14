@@ -5,6 +5,7 @@
 #include "qindb/auth_manager.h"
 #include <QtCore/QObject>
 #include <QtNetwork/QTcpSocket>
+#include <QtNetwork/QSslSocket>
 #include <QtCore/QByteArray>
 #include <memory>
 
@@ -77,6 +78,11 @@ private slots:
      * @brief 错误槽函数
      */
     void onError(QAbstractSocket::SocketError socketError);
+
+    /**
+     * @brief SSL错误槽函数
+     */
+    void onSslErrors(const QList<QSslError>& errors);
 
 private:
     /**

@@ -4,8 +4,10 @@
 #include "qindb/connection_string_parser.h"
 #include "qindb/protocol.h"
 #include "qindb/message_codec.h"
+#include "qindb/fingerprint_manager.h"
 #include <QtCore/QObject>
 #include <QtNetwork/QTcpSocket>
+#include <QtNetwork/QSslSocket>
 #include <QtCore/QByteArray>
 #include <QtCore/QTimer>
 #include <memory>
@@ -16,6 +18,7 @@ namespace qindb {
  * @brief 客户端连接管理器
  *
  * 负责管理与服务器的连接，处理认证和基本的网络通信。
+ * 支持TLS加密连接和SSH风格的指纹验证。
  */
 class ClientManager : public QObject {
     Q_OBJECT
@@ -69,6 +72,12 @@ public:
      */
     QString getConnectionInfo() const;
 
+    /**
+     * @brief 设置指纹确认回调函数
+     * @param callback 回调函数
+     */
+    void setFingerprintConfirmationCallback(FingerprintManager::ConfirmationCallback callback);
+
 signals:
     /**
      * @brief 连接成功信号
@@ -105,6 +114,11 @@ signals:
      */
     void connectionStatusChanged(const QString& status);
 
+    /**
+     * @brief TLS错误信号
+     */
+    void sslError(const QString& error);
+
 private slots:
     /**
      * @brief 连接槽函数
@@ -130,6 +144,16 @@ private slots:
      * @brief 心跳超时槽函数
      */
     void onHeartbeatTimeout();
+
+    /**
+     * @brief SSL加密建立槽函数
+     */
+    void onEncrypted();
+
+    /**
+     * @brief SSL错误槽函数
+     */
+    void onSslErrors(const QList<QSslError>& errors);
 
 private:
     /**
@@ -168,7 +192,7 @@ private:
     void updateConnectionStatus(const QString& status);
 
 private:
-    QTcpSocket* socket_;                    // TCP套接字
+    QTcpSocket* socket_;                    // TCP套接字（可能是QSslSocket）
     QByteArray receiveBuffer_;               // 接收缓冲区
     ConnectionParams connectionParams_;      // 连接参数
     uint64_t currentSessionId_;              // 当前会话ID
@@ -176,6 +200,9 @@ private:
     QTimer* heartbeatTimer_;                 // 心跳定时器
     int heartbeatInterval_;                  // 心跳间隔（毫秒）
     int lastActivityTime_;                   // 最后活动时间
+
+    // TLS/SSL 支持
+    std::unique_ptr<FingerprintManager> fingerprintManager_;  // 指纹管理器
 };
 
 } // namespace qindb

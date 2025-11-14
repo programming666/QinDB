@@ -67,6 +67,7 @@ target_sources(qindb_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/optimizer/cost_model.cpp
     ${CMAKE_SOURCE_DIR}/src/optimizer/statistics.cpp
     ${CMAKE_SOURCE_DIR}/src/cache/query_cache.cpp
+    ${CMAKE_SOURCE_DIR}/src/cache/table_cache.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/result_exporter.cpp
     ${CMAKE_SOURCE_DIR}/src/core/config.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/logger.cpp
@@ -74,9 +75,97 @@ target_sources(qindb_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/network/connection_string_parser.cpp
 )
 
-# 添加测试
-enable_testing()
-add_test(NAME qindb_unit_tests COMMAND qindb_tests)
+# TLS Handshake Manager 测试可执行文件
+add_executable(test_tls_handshake
+    test_framework.cpp
+    test_tls_handshake.cpp
+    ${CMAKE_SOURCE_DIR}/include/qindb/tls_handshake_manager.h
+)
+
+# 设置AUTOMOC属性
+set_target_properties(test_tls_handshake PROPERTIES AUTOMOC ON)
+
+target_include_directories(test_tls_handshake PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/tests
+)
+
+target_link_libraries(test_tls_handshake PRIVATE
+    Qt6::Core
+    Qt6::Network
+)
+
+if(WIN32)
+    target_link_options(test_tls_handshake PRIVATE -Wl,-subsystem,console)
+endif()
+
+target_sources(test_tls_handshake PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/network/tls_handshake_manager.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/tls_config.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/certificate_generator.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/sslError_handler.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/fingerprint_manager.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/logger.cpp
+)
+
+add_test(NAME test_tls_handshake COMMAND test_tls_handshake)
+
+# TLS Handshake Manager 简化测试可执行文件
+add_executable(test_tls_handshake_simple
+    test_framework.cpp
+    test_tls_handshake_simple.cpp
+)
+
+target_include_directories(test_tls_handshake_simple PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/tests
+)
+
+target_link_libraries(test_tls_handshake_simple PRIVATE
+    Qt6::Core
+    Qt6::Network
+)
+
+if(WIN32)
+    target_link_options(test_tls_handshake_simple PRIVATE -Wl,-subsystem,console)
+endif()
+
+target_sources(test_tls_handshake_simple PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/network/tls_config.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/certificate_generator.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/sslError_handler.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/logger.cpp
+)
+
+add_test(NAME test_tls_handshake_simple COMMAND test_tls_handshake_simple)
+
+# SSL Error Handler 测试可执行文件
+add_executable(test_ssl_error_handler
+    test_framework.cpp
+    test_ssl_error_handler.cpp
+)
+
+target_include_directories(test_ssl_error_handler PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/tests
+)
+
+target_link_libraries(test_ssl_error_handler PRIVATE
+    Qt6::Core
+    Qt6::Network
+)
+
+if(WIN32)
+    target_link_options(test_ssl_error_handler PRIVATE -Wl,-subsystem,console)
+endif()
+
+target_sources(test_ssl_error_handler PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/network/sslError_handler.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/certificate_generator.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/logger.cpp
+)
+
+add_test(NAME test_ssl_error_handler COMMAND test_ssl_error_handler)
 
 # 调试测试可执行文件（用于调试B+树问题）
 add_executable(test_debug_bptree
@@ -449,6 +538,7 @@ target_sources(test_executor PRIVATE
     ${CMAKE_SOURCE_DIR}/src/utils/logger.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/result_exporter.cpp
     ${CMAKE_SOURCE_DIR}/src/cache/query_cache.cpp
+    ${CMAKE_SOURCE_DIR}/src/cache/table_cache.cpp
     ${CMAKE_SOURCE_DIR}/src/storage/wal.cpp
     ${CMAKE_SOURCE_DIR}/src/storage/wal_db_backend.cpp
     ${CMAKE_SOURCE_DIR}/src/storage/transaction.cpp
@@ -483,4 +573,8 @@ target_sources(test_ip_whitelist PRIVATE
 )
 
 add_test(NAME test_ip_whitelist COMMAND test_ip_whitelist)
+
+# 添加测试
+enable_testing()
+add_test(NAME qindb_unit_tests COMMAND qindb_tests)
 

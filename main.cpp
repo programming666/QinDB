@@ -23,7 +23,110 @@
 #include <windows.h>
 #include <io.h>
 #include <fcntl.h>
+#else
+#include <signal.h>
 #endif
+#include <csignal>
+#include <atomic>
+
+// 全局变量用于信号处理
+std::atomic<bool> g_shutdownRequested(false);
+qindb::DatabaseManager* g_databaseManager = nullptr;
+qindb::Server* g_server = nullptr;
+
+/**
+ * @brief 统一的数据库清理函数
+ * 仅在 CTRL+C 信号时调用，确保所有数据正确保存
+ * exit 命令应该让程序正常退出，由 DatabaseManager 析构函数自动清理
+ */
+void cleanupDatabases() {
+    static std::atomic<bool> cleanupInProgress(false);
+
+    if (cleanupInProgress.exchange(true)) {
+        // 已经在清理中，避免重复
+        return;
+    }
+
+    std::wcout << L"\n正在关闭数据库系统，请稍候...\n" << std::flush;
+    LOG_INFO("Signal received, shutting down database system...");
+
+    // 停止网络服务器
+    if (g_server) {
+        LOG_INFO("Stopping network server");
+        g_server->stop();
+    }
+
+    // 刷新所有数据库
+    if (g_databaseManager) {
+        LOG_INFO("Flushing all databases...");
+
+        // 获取所有数据库并逐个刷新
+        QVector<QString> allDatabases = g_databaseManager->getAllDatabaseNames();
+        QString currentDb = g_databaseManager->currentDatabaseName();
+
+        for (const QString& dbName : allDatabases) {
+            if (g_databaseManager->databaseExists(dbName)) {
+                LOG_INFO(QString("Flushing database '%1'...").arg(dbName));
+
+                // 切换到该数据库
+                if (g_databaseManager->useDatabase(dbName)) {
+                    // 获取组件
+                    qindb::BufferPoolManager* bufferPool = g_databaseManager->getCurrentBufferPool();
+                    qindb::WALManager* walManager = g_databaseManager->getCurrentWALManager();
+                    qindb::Catalog* catalog = g_databaseManager->getCurrentCatalog();
+
+                    // 刷新缓冲池
+                    if (bufferPool) {
+                        bufferPool->flushAllPages();
+                        LOG_INFO(QString("Flushed buffer pool for '%1'").arg(dbName));
+                    }
+
+                    // 刷新 WAL
+                    if (walManager) {
+                        walManager->flush();
+                        LOG_INFO(QString("Flushed WAL for '%1'").arg(dbName));
+                    }
+
+                    // 保存 catalog
+                    if (catalog) {
+                        QString catalogPath = g_databaseManager->getDatabasePath(dbName) + "/" + qindb::Config::instance().getCatalogFilePath();
+                        catalog->save(catalogPath);
+                        LOG_INFO(QString("Saved catalog for '%1'").arg(dbName));
+                    }
+                }
+            }
+        }
+
+        // 恢复当前数据库
+        if (!currentDb.isEmpty()) {
+            g_databaseManager->useDatabase(currentDb);
+        }
+
+        // 保存数据库管理器状态
+        g_databaseManager->saveToDisk();
+        LOG_INFO("Database manager state saved");
+    }
+
+    std::wcout << L"✓ 数据已保存" << std::endl;
+    LOG_INFO("Database system shutdown complete");
+}
+
+// 信号处理函数（处理 CTRL+C）
+void signalHandler(int signal) {
+    if (signal == SIGINT || signal == SIGTERM) {
+        if (!g_shutdownRequested.exchange(true)) {
+            // 第一次接收到信号，执行清理
+            std::wcout << L"\n\n收到中断信号..." << std::flush;
+            cleanupDatabases();
+            std::wcout << L"再见！\n" << std::flush;
+            std::exit(0);
+        } else {
+            // 第二次接收到信号，强制退出
+            std::wcout << L"\n强制退出！\n" << std::flush;
+            std::exit(1);
+        }
+    }
+}
 
 void setupConsole() {
 #ifdef _WIN32
@@ -80,7 +183,7 @@ void showHelp() {
   DROP INDEX <name>                         - 删除索引
 
 数据操作 命令:
-  SELECT ... FROM ... WHERE ...    - 查询数据 (支持索引优化)
+  SELECT ... FROM ... WHERE ...    - 查询数据
   INSERT INTO ... VALUES (...)     - 插入数据
   UPDATE ... SET ... WHERE ...     - 更新数据
   DELETE FROM ... WHERE ...        - 删除数据
@@ -309,6 +412,93 @@ void analyzeSql(const QString& sql, qindb::Executor* executor) {
 }
 
 /**
+ * @brief 显示查询响应结果
+ * @param response 查询响应
+ */
+void displayQueryResponse(const qindb::QueryResponse& response) {
+    using namespace qindb;
+
+    // 检查查询状态
+    if (response.status != QueryStatus::SUCCESS) {
+        std::wcout << L"✗ 查询失败\n";
+        return;
+    }
+
+    // 根据结果类型显示不同的输出
+    switch (response.resultType) {
+    case ResultType::EMPTY:
+        // DDL/DML 语句，显示影响的行数
+        std::wcout << L"✓ 查询执行成功";
+        if (response.rowsAffected > 0) {
+            std::wcout << L" (" << response.rowsAffected << L" 行受影响)";
+        }
+        std::wcout << L"\n\n";
+        break;
+
+    case ResultType::TABLE_DATA:
+    case ResultType::SINGLE_VALUE:
+        // SELECT 查询，显示表格数据
+        if (response.rows.isEmpty()) {
+            std::wcout << L"✓ 查询执行成功 (0 行)\n\n";
+        } else {
+            std::wcout << L"✓ 查询执行成功 (" << response.rows.size() << L" 行)\n\n";
+
+            // 计算每列的最大宽度
+            QVector<int> columnWidths;
+            for (int i = 0; i < response.columns.size(); ++i) {
+                int maxWidth = response.columns[i].name.length();
+                for (const auto& row : response.rows) {
+                    if (i < row.size()) {
+                        QString valueStr = row[i].isNull() ? "NULL" : row[i].toString();
+                        int valueWidth = valueStr.length();
+                        if (valueWidth > maxWidth) {
+                            maxWidth = valueWidth;
+                        }
+                    }
+                }
+                columnWidths.append(maxWidth + 2); // 加2个空格作为间距
+            }
+
+            // 显示列名
+            for (int i = 0; i < response.columns.size(); ++i) {
+                QString colName = response.columns[i].name;
+                std::wcout << colName.toStdWString();
+                // 填充空格
+                int padding = columnWidths[i] - colName.length();
+                for (int j = 0; j < padding; ++j) {
+                    std::wcout << L" ";
+                }
+            }
+            std::wcout << L"\n";
+
+            // 显示分隔线
+            for (int i = 0; i < response.columns.size(); ++i) {
+                for (int j = 0; j < columnWidths[i]; ++j) {
+                    std::wcout << L"-";
+                }
+            }
+            std::wcout << L"\n";
+
+            // 显示数据
+            for (const auto& row : response.rows) {
+                for (int i = 0; i < row.size(); ++i) {
+                    QString value = row[i].isNull() ? "NULL" : row[i].toString();
+                    std::wcout << value.toStdWString();
+                    // 填充空格
+                    int padding = columnWidths[i] - value.length();
+                    for (int j = 0; j < padding; ++j) {
+                        std::wcout << L" ";
+                    }
+                }
+                std::wcout << L"\n";
+            }
+            std::wcout << L"\n";
+        }
+        break;
+    }
+}
+
+/**
  * @brief 运行客户端模式（使用连接字符串）
  * @param connectionString 连接字符串
  * @return 客户端程序退出代码
@@ -324,11 +514,46 @@ int runClientMode(const QString& connectionString) {
 
     auto params = paramsOpt.value();
 
-    std::wcout << L"正在连接到服务器 " << params.host.toStdWString() 
-              << L":" << params.port << L"...\n" << std::endl;
+    std::wcout << L"正在连接到服务器 " << params.host.toStdWString()
+              << L":" << params.port;
+    if (params.sslEnabled) {
+        std::wcout << L" (TLS加密)";
+    }
+    std::wcout << L"...\n" << std::endl;
 
     // 创建客户端管理器
     qindb::ClientManager clientManager;
+
+    // 设置指纹确认回调（用于TLS连接）
+    clientManager.setFingerprintConfirmationCallback(
+        [](const QString& host, uint16_t port, const QString& /*fingerprint*/,
+           const QString& formattedFingerprint) -> bool {
+            std::wcout << L"\n";
+            std::wcout << L"═══════════════════════════════════════════════════════════\n";
+            std::wcout << L"警告: 未知的服务器证书指纹\n";
+            std::wcout << L"═══════════════════════════════════════════════════════════\n";
+            std::wcout << L"服务器: " << host.toStdWString() << L":" << port << L"\n";
+            std::wcout << L"证书指纹 (SHA256):\n";
+            std::wcout << L"  " << formattedFingerprint.toStdWString() << L"\n\n";
+            std::wcout << L"这是您第一次连接到此服务器，或服务器证书已更改。\n";
+            std::wcout << L"如果您信任此服务器，指纹将被保存到 ~/.qindb/known_hosts\n\n";
+            std::wcout << L"是否信任此证书? (yes/no): " << std::flush;
+
+            std::wstring response;
+            std::getline(std::wcin, response);
+
+            // 转换为小写
+            QString qResponse = QString::fromStdWString(response).trimmed().toLower();
+
+            if (qResponse == "yes" || qResponse == "y") {
+                std::wcout << L"✓ 证书已接受并保存\n" << std::endl;
+                return true;
+            } else {
+                std::wcout << L"✗ 证书已拒绝，连接已取消\n" << std::endl;
+                return false;
+            }
+        }
+    );
 
     // 连接信号槽
     QObject::connect(&clientManager, &qindb::ClientManager::connected, [&]() {
@@ -347,9 +572,18 @@ int runClientMode(const QString& connectionString) {
         std::wcout << L"✗ 错误: " << error.toStdWString() << L"\n" << std::endl;
     });
 
+    QObject::connect(&clientManager, &qindb::ClientManager::sslError, [](const QString& error) {
+        std::wcout << L"\n";
+        std::wcout << L"═══════════════════════════════════════════════════════════\n";
+        std::wcout << L"TLS错误\n";
+        std::wcout << L"═══════════════════════════════════════════════════════════\n";
+        std::wcout << error.toStdWString() << L"\n";
+        std::wcout << L"═══════════════════════════════════════════════════════════\n";
+        std::wcout << L"\n" << std::endl;
+    });
+
     QObject::connect(&clientManager, &qindb::ClientManager::queryResponse, [](const qindb::QueryResponse& response) {
-        std::wcout << L"收到查询响应\n" << std::endl;
-        // 这里可以添加响应处理逻辑
+        displayQueryResponse(response);
     });
 
     // 连接到服务器
@@ -359,15 +593,27 @@ int runClientMode(const QString& connectionString) {
     }
 
     // 等待认证完成
-    while (!clientManager.isAuthenticated()) {
+    int authWaitCount = 0;
+    while (!clientManager.isAuthenticated() && authWaitCount < 50) {
         QCoreApplication::processEvents();
         QThread::msleep(100);
+        authWaitCount++;
     }
 
     if (!clientManager.isAuthenticated()) {
-        std::wcout << L"✗ 认证失败，无法继续\n" << std::endl;
+        std::wcout << L"✗ 认证失败或超时，无法继续\n" << std::endl;
         return 1;
     }
+
+    // 用于同步等待查询响应
+    bool waitingForResponse = false;
+
+    // 更新查询响应处理，设置标志
+    QObject::disconnect(&clientManager, &qindb::ClientManager::queryResponse, nullptr, nullptr);
+    QObject::connect(&clientManager, &qindb::ClientManager::queryResponse, [&waitingForResponse](const qindb::QueryResponse& response) {
+        displayQueryResponse(response);
+        waitingForResponse = false;
+    });
 
     // 客户端交互循环
     std::wstring line;
@@ -448,7 +694,20 @@ int runClientMode(const QString& connectionString) {
 
         // 发送查询到服务器
         if (clientManager.sendQuery(sql)) {
-            std::wcout << L"✓ 查询已发送\n" << std::endl;
+            waitingForResponse = true;
+
+            // 等待响应（最多5秒）
+            int waitCount = 0;
+            while (waitingForResponse && waitCount < 50) {
+                QCoreApplication::processEvents();
+                QThread::msleep(100);
+                waitCount++;
+            }
+
+            if (waitingForResponse) {
+                std::wcout << L"✗ 等待服务器响应超时\n" << std::endl;
+                waitingForResponse = false;
+            }
         } else {
             std::wcout << L"✗ 发送查询失败\n" << std::endl;
         }
@@ -505,7 +764,10 @@ void runInteractiveMode(qindb::Executor* executor, qindb::DatabaseManager* dbMan
 
             // 处理特殊命令
             if (currentInput == "exit" || currentInput == "quit") {
+                // 不调用 cleanupDatabases()，让程序正常退出
+                // DatabaseManager 的析构函数会自动刷新所有数据
                 std::wcout << L"再见!" << std::endl;
+                LOG_INFO("User requested exit, shutting down gracefully...");
                 break;
             } else if (currentInput == "help") {
                 showHelp();
@@ -566,6 +828,10 @@ int main(int argc, char *argv[])
     // 首先设置控制台
     setupConsole();
 
+    // 注册信号处理器
+    std::signal(SIGINT, signalHandler);
+    std::signal(SIGTERM, signalHandler);
+
     try {
         QCoreApplication app(argc, argv);
 
@@ -580,13 +846,14 @@ int main(int argc, char *argv[])
                 isServerMode = true;
             } else if (arg == "--client" || arg == "-c") {
                 isClientMode = true;
-            } else if (arg.startsWith("--connect=") || arg.startsWith("-c=")) {
+            } else if (arg.startsWith("--connect=")) {
                 connectionString = arg.mid(arg.indexOf('=') + 1);
+                isClientMode = true;  // 自动启用客户端模式
             } else if (arg == "--help" || arg == "-?") {
                 std::wcout << L"用法: qindb [选项]\n";
                 std::wcout << L"  --server, -s                    以服务器模式启动\n";
                 std::wcout << L"  --client, -c                    以客户端模式启动\n";
-                std::wcout << L"  --connect=<连接字符串>          客户端连接字符串\n";
+                std::wcout << L"  --connect=<连接字符串>          连接到远程服务器（自动启用客户端模式）\n";
                 std::wcout << L"  --help, -?                      显示帮助信息\n";
                 std::wcout << L"\n连接字符串格式:\n";
                 std::wcout << L"  qindb://主机:端口?usr=用户名&pswd=密码&ssl=是否启用\n";
@@ -653,6 +920,9 @@ int main(int argc, char *argv[])
         std::wcout << L"正在初始化数据库管理器...\n" << std::endl;
 
         qindb::DatabaseManager databaseManager(config.getDefaultDbPath());
+
+        // 设置全局变量以便信号处理器使用
+        g_databaseManager = &databaseManager;
 
         // 添加异常处理
         try {
@@ -814,13 +1084,43 @@ int main(int argc, char *argv[])
 
             server = new qindb::Server(&databaseManager, authManager);
 
+            // 设置全局变量以便信号处理器使用
+            g_server = server;
+
+            // 检查是否启用SSL
+            if (config.isSSLEnabled()) {
+                LOG_INFO("SSL/TLS is enabled, configuring server certificates...");
+                std::wcout << L"正在配置TLS加密...\n" << std::endl;
+
+                QString certPath = config.getSSLCertPath();
+                QString keyPath = config.getSSLKeyPath();
+
+                if (server->enableTLS(certPath, keyPath, true)) {
+                    LOG_INFO("TLS enabled successfully");
+                    std::wcout << L"✓ TLS加密已启用\n" << std::endl;
+                } else {
+                    LOG_ERROR("Failed to enable TLS");
+                    std::wcout << L"✗ TLS配置失败，服务器将以非加密模式运行\n" << std::endl;
+                }
+            } else {
+                LOG_INFO("SSL/TLS is disabled, server will run in plain TCP mode");
+                std::wcout << L"提示: TLS未启用，连接将不加密。在qindb.ini中设置Network/SSLEnabled=true来启用加密。\n" << std::endl;
+            }
+
             QString address = config.getServerAddress();
             uint16_t port = config.getServerPort();
 
             if (server->start(address, port)) {
-                LOG_INFO(QString("Network server started on %1:%2").arg(address).arg(port));
+                LOG_INFO(QString("Network server started on %1:%2 %3")
+                            .arg(address)
+                            .arg(port)
+                            .arg(config.isSSLEnabled() ? "(TLS enabled)" : "(plain TCP)"));
                 std::wcout << L"✓ 网络服务器启动成功: " << address.toStdWString()
-                          << L":" << port << L"\n" << std::endl;
+                          << L":" << port;
+                if (config.isSSLEnabled()) {
+                    std::wcout << L" (TLS加密)";
+                }
+                std::wcout << L"\n" << std::endl;
             } else {
                 LOG_ERROR("Failed to start network server");
                 std::wcout << L"✗ 网络服务器启动失败\n" << std::endl;
@@ -835,9 +1135,9 @@ int main(int argc, char *argv[])
         // 确定运行模式
         bool useInteractiveMode = true;  // 默认使用交互模式
 
-        // 如果指定了服务器模式且没有客户端连接，则使用Qt事件循环
-        if (isServerMode && !server) {
-            useInteractiveMode = false;  // 无法启动服务器，退出
+        // 如果指定了服务器模式且服务器成功启动，则使用Qt事件循环
+        if (isServerMode && server) {
+            useInteractiveMode = false;  // 服务器模式，使用事件循环
         }
 
         if (server && !useInteractiveMode) {
@@ -851,6 +1151,10 @@ int main(int argc, char *argv[])
             LOG_INFO("Stopping network server");
             server->stop();
             delete server;
+            g_server = nullptr;  // 清空全局变量
+
+            // 清空数据库管理器全局变量
+            g_databaseManager = nullptr;
 
             return exitCode;
         } else {
@@ -858,22 +1162,36 @@ int main(int argc, char *argv[])
             LOG_INFO("Entering interactive mode");
             runInteractiveMode(&executor, &databaseManager);
 
+            LOG_INFO("Interactive mode exited, cleaning up...");
+            std::wcout << L"正在清理资源...\n" << std::flush;
+
             // 清理网络服务器
             if (server) {
                 LOG_INFO("Stopping network server");
+                std::wcout << L"正在停止网络服务器...\n" << std::flush;
                 server->stop();
                 delete server;
+                g_server = nullptr;  // 清空全局变量
+                LOG_INFO("Network server stopped");
+                std::wcout << L"✓ 网络服务器已停止\n" << std::flush;
+            }
+
+            // 清理认证管理器
+            if (authManager) {
+                LOG_INFO("Cleaning up authentication manager");
+                delete authManager;
+                authManager = nullptr;
+                LOG_INFO("Authentication manager cleaned up");
             }
         }
 
-        // 保存数据库管理器状态
-        if (!databaseManager.saveToDisk()) {
-            LOG_ERROR("Failed to save database manager state");
-        } else {
-            LOG_INFO("Database manager state saved successfully");
-        }
+        // DatabaseManager 的析构函数会自动刷新所有数据库
+        // 清空全局变量
+        LOG_INFO("Clearing global variables");
+        g_databaseManager = nullptr;
 
         LOG_INFO("qinDB Database System Shutting down");
+        std::wcout << L"✓ 数据库系统正常关闭\n" << std::flush;
 
         return 0;
     } catch (const std::exception& e) {

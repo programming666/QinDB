@@ -4,7 +4,9 @@
 #include "qindb/executor.h"
 #include "qindb/parser.h"
 #include "qindb/logger.h"
+#include "qindb/ssLError_handler.h"
 #include <QtNetwork/QTcpSocket>
+#include <QtNetwork/QSslSocket>
 
 namespace qindb {
 
@@ -29,6 +31,13 @@ ClientConnection::ClientConnection(QTcpSocket* socket,
     connect(socket_, &QTcpSocket::readyRead, this, &ClientConnection::onReadyRead);
     connect(socket_, &QTcpSocket::disconnected, this, &ClientConnection::onDisconnected);
     connect(socket_, &QTcpSocket::errorOccurred, this, &ClientConnection::onError);
+
+    // 如果是SSL连接，处理SSL错误
+    QSslSocket* sslSocket = qobject_cast<QSslSocket*>(socket_);
+    if (sslSocket) {
+        connect(sslSocket, &QSslSocket::sslErrors, this, &ClientConnection::onSslErrors);
+        LOG_INFO("SSL socket detected, connected SSL error handler");
+    }
 
     LOG_INFO(QString("New client connected from %1:%2")
                 .arg(socket_->peerAddress().toString())
@@ -329,6 +338,43 @@ bool ClientConnection::authenticateUser(const QString& username,
 
 uint64_t ClientConnection::generateSessionId() {
     return nextSessionId_++;
+}
+
+void ClientConnection::onSslErrors(const QList<QSslError>& errors) {
+    // SSL错误处理 - 使用SSLErrorHandler统一管理
+    QSslSocket* sslSocket = qobject_cast<QSslSocket*>(socket_);
+    if (!sslSocket) {
+        return;
+    }
+
+    // 使用SSLErrorHandler处理错误
+    auto criticalErrors = SSLErrorHandler::filterIgnorableErrors(errors, true); // 服务器端允许自签名
+
+    // 记录所有错误
+    for (const auto& error : errors) {
+        auto severity = SSLErrorHandler::getErrorSeverity(error, true);
+        
+        switch (severity) {
+            case SSLErrorHandler::ErrorSeverity::CRITICAL:
+                LOG_ERROR(QString("Critical SSL error: %1").arg(error.errorString()));
+                break;
+            case SSLErrorHandler::ErrorSeverity::WARNING:
+                LOG_WARN(QString("SSL warning: %1").arg(error.errorString()));
+                break;
+            case SSLErrorHandler::ErrorSeverity::IGNORABLE:
+                LOG_DEBUG(QString("Ignoring SSL error: %1").arg(error.errorString()));
+                break;
+        }
+    }
+
+    if (criticalErrors.isEmpty()) {
+        // 没有严重错误,忽略所有错误(主要是自签名证书相关)
+        LOG_INFO(QString("Ignoring %1 SSL error(s) for self-signed certificate").arg(errors.size()));
+        sslSocket->ignoreSslErrors(errors);
+    } else {
+        LOG_ERROR(QString("Cannot ignore %1 critical SSL error(s)").arg(criticalErrors.size()));
+        // 不调用ignoreSslErrors(),让连接失败
+    }
 }
 
 } // namespace qindb
