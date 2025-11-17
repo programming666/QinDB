@@ -121,6 +121,10 @@ void ClientConnection::handleMessage(const QByteArray& data) {
         handleQueryRequest(payload);
         break;
 
+    case MessageType::DATABASE_SWITCH:
+        handleDatabaseSwitch(payload);
+        break;
+
     case MessageType::PING:
         handlePing();
         break;
@@ -208,6 +212,32 @@ void ClientConnection::handleQueryRequest(const QByteArray& payload) {
         return;
     }
 
+    // 解析SQL以检查是否是USE DATABASE语句
+    Parser parser(request.sql);
+    auto ast = parser.parse();
+    
+    if (!ast) {
+        sendError(NetworkErrorCode::SYNTAX_ERROR,
+                 QString("Failed to parse SQL: %1").arg(request.sql));
+        return;
+    }
+    
+    // 如果是USE DATABASE语句，直接返回成功，不再执行切换
+    // 因为数据库切换已经通过专门的DATABASE_SWITCH消息处理过了
+    if (dynamic_cast<const UseDatabaseStatement*>(ast.get())) {
+        QueryResponse result;
+        result.status = QueryStatus::SUCCESS;
+        result.resultType = ResultType::EMPTY;
+        result.rowsAffected = 0;
+        result.currentDatabase = currentDatabase_;  // 使用当前已切换的数据库
+        
+        LOG_INFO(QString("USE DATABASE statement skipped (already handled by DATABASE_SWITCH): %1")
+                    .arg(request.sql));
+        
+        sendMessage(MessageCodec::encodeQueryResponse(result));
+        return;
+    }
+
     // 执行查询
     QueryResponse result;
 
@@ -274,6 +304,53 @@ void ClientConnection::handleQueryRequest(const QByteArray& payload) {
     sendMessage(MessageCodec::encodeQueryResponse(result));
 }
 
+void ClientConnection::handleDatabaseSwitch(const QByteArray& payload) {
+    // 检查是否已认证
+    if (!isAuthenticated_) {
+        sendError(NetworkErrorCode::AUTH_FAILED, "Not authenticated");
+        return;
+    }
+
+    auto messageOpt = MessageCodec::decodeDatabaseSwitch(payload);
+    if (!messageOpt) {
+        sendError(NetworkErrorCode::PROTOCOL_ERROR, "Failed to decode DATABASE_SWITCH message");
+        return;
+    }
+
+    const DatabaseSwitchMessage& message = *messageOpt;
+    
+    LOG_INFO(QString("Database switch request (session: %1): %2")
+                .arg(sessionId_)
+                .arg(message.databaseName));
+
+    // 验证会话 ID（虽然数据库切换不需要会话验证，但为了安全还是检查）
+    // 注意：这里我们不需要验证会话ID，因为数据库切换是独立的操作
+
+    // 尝试切换到目标数据库
+    if (!dbManager_->useDatabase(message.databaseName)) {
+        sendError(NetworkErrorCode::RUNTIME_ERROR,
+                 QString("Failed to switch to database '%1'").arg(message.databaseName),
+                 dbManager_->lastError().message);
+        return;
+    }
+
+    // 更新客户端的当前数据库
+    currentDatabase_ = message.databaseName;
+    
+    LOG_INFO(QString("Client %1 switched to database '%2'")
+                .arg(clientAddress())
+                .arg(message.databaseName));
+
+    // 发送成功响应 - 使用 QUERY_RESPONSE 消息类型来表示操作成功
+    QueryResponse result;
+    result.status = QueryStatus::SUCCESS;
+    result.resultType = ResultType::EMPTY;
+    result.rowsAffected = 0;
+    result.currentDatabase = message.databaseName;
+    
+    sendMessage(MessageCodec::encodeQueryResponse(result));
+}
+
 void ClientConnection::handlePing() {
     // 发送 PONG 响应
     QByteArray pong = MessageCodec::encodeMessage(MessageType::PONG, QByteArray());
@@ -318,6 +395,25 @@ void ClientConnection::sendError(uint32_t errorCode, const QString& message, con
 bool ClientConnection::authenticateUser(const QString& username,
                                         const QString& password,
                                         const QString& database) {
+    // 添加详细的参数验证和日志记录
+    LOG_INFO(QString("Authentication attempt - Username: '%1', Database: '%2'").arg(username).arg(database));
+    
+    // 验证输入参数
+    if (username.isEmpty()) {
+        LOG_ERROR("Authentication failed: username is empty");
+        return false;
+    }
+    
+    if (password.isEmpty()) {
+        LOG_ERROR("Authentication failed: password is empty");
+        return false;
+    }
+    
+    if (database.isEmpty()) {
+        LOG_ERROR("Authentication failed: database is empty");
+        return false;
+    }
+
     // 检查数据库是否存在
     if (!dbManager_->databaseExists(database)) {
         LOG_WARN(QString("Database '%1' not found").arg(database));

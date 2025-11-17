@@ -1,13 +1,18 @@
-#include "qindb/table_cache.h"
-#include "qindb/catalog.h"
-#include "qindb/buffer_pool_manager.h"
-#include "qindb/page.h"
-#include "qindb/logger.h"
-#include <QMutexLocker>
+#include "qindb/table_cache.h"  // 引入表缓存相关的头文件
+#include "qindb/catalog.h"    // 引入目录相关的头文件
+#include "qindb/buffer_pool_manager.h"  // 引入缓冲池管理器头文件
+#include "qindb/page.h"       // 引入页面相关的头文件
+#include "qindb/logger.h"     // 引入日志相关的头文件
+#include <QMutexLocker>       // 引入Qt互斥锁保护类
 #include <QDebug>
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
+/**
+ * @brief TableCache类的构造函数
+ * @param maxTableSizeBytes 单个表的最大缓存大小（字节）
+ * @param maxTotalMemoryBytes 缓存的最大总内存大小（字节）
+ */
 TableCache::TableCache(uint64_t maxTableSizeBytes, uint64_t maxTotalMemoryBytes)
     : maxTableSizeBytes_(maxTableSizeBytes),
       maxTotalMemoryBytes_(maxTotalMemoryBytes),

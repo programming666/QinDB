@@ -1,15 +1,15 @@
-#ifndef QINDB_WAL_H
+#ifndef QINDB_WAL_H    // 防止头文件重复包含
 #define QINDB_WAL_H
 
-#include "common.h"
-#include <QString>
-#include <QFile>
-#include <QMutex>
-#include <memory>
+#include "common.h"    // 包含公共定义和常量
+#include <QString>     // Qt字符串类
+#include <QFile>       // Qt文件操作类
+#include <QMutex>      // Qt互斥锁类
+#include <memory>      // 智能指针相关头文件
 
-namespace qindb {
+namespace qindb {     // 定义qindb命名空间
 
-// 前向声明
+// 前向声明，避免循环依赖
 class WalDbBackend;
 class BufferPoolManager;
 class DiskManager;

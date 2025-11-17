@@ -1,37 +1,39 @@
-#ifndef QINDB_TRANSACTION_H
+#ifndef QINDB_TRANSACTION_H  // 防止重复包含该头文件
 #define QINDB_TRANSACTION_H
 
-#include "common.h"
-#include "wal.h"
-#include "undo_log.h"
-#include <QMutex>
-#include <QHash>
-#include <QSet>
-#include <QDateTime>
-#include <memory>
+#include "common.h"       // 包含公共定义和类型
+#include "wal.h"          // 包含预写日志相关定义
+#include "undo_log.h"     // 包含撤销日志相关定义
+#include <QMutex>         // Qt互斥锁，用于线程同步
+#include <QHash>          // Qt哈希表，用于高效查找
+#include <QSet>           // Qt集合，用于存储唯一值
+#include <QDateTime>      // Qt日期时间类，用于时间处理
+#include <memory>         // 智能指针相关头文件
 
-namespace qindb {
+namespace qindb {         // 定义qindb命名空间
 
 /**
- * @brief 事务状态
+ * @brief 事务状态枚举
+ * 定义了事务可能的状态
  */
 enum class TransactionState {
-    INVALID = 0,
-    ACTIVE,      // 活跃中
-    COMMITTED,   // 已提交
-    ABORTED      // 已回滚
+    INVALID = 0,    // 无效状态
+    ACTIVE,      // 活跃中，事务正在进行
+    COMMITTED,   // 已提交，事务成功完成
+    ABORTED      // 已回滚，事务被中止
 };
 
 /**
- * @brief 锁类型
+ * @brief 锁类型枚举
+ * 定义了系统中使用的锁类型
  */
 enum class LockType {
-    SHARED,      // 共享锁（读锁）
-    EXCLUSIVE    // 排他锁（写锁）
+    SHARED,      // 共享锁（读锁），允许多个事务同时读取
+    EXCLUSIVE    // 排他锁（写锁），只允许一个事务访问
 };
 
 /**
- * @brief 事务上下文
+ * @brief 事务上下文结构体
  */
 struct Transaction {
     TransactionId txnId;                // 事务ID

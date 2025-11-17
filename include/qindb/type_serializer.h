@@ -1,12 +1,12 @@
-#ifndef QINDB_TYPE_SERIALIZER_H
+#ifndef QINDB_TYPE_SERIALIZER_H  // 防止头文件重复包含
 #define QINDB_TYPE_SERIALIZER_H
 
-#include "common.h"
-#include <QVariant>
-#include <QByteArray>
-#include <QDataStream>
+#include "common.h"  // 包含公共定义和类型
+#include <QVariant>  // Qt的通用数据类型容器
+#include <QByteArray>  // Qt的字节数组类
+#include <QDataStream>  // Qt的数据流类，用于序列化
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 /**
  * @brief 数据类型序列化器

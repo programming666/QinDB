@@ -67,6 +67,13 @@ public:
     bool sendQuery(const QString& sql);
 
     /**
+     * @brief 发送数据库切换消息
+     * @param databaseName 数据库名
+     * @return 是否发送成功
+     */
+    bool sendDatabaseSwitch(const QString& databaseName);
+
+    /**
      * @brief 获取连接状态信息
      * @return 状态信息
      */
@@ -96,26 +103,31 @@ signals:
 
     /**
      * @brief 认证失败信号
+     * @param error 错误信息
      */
     void authenticationFailed(const QString& error);
 
     /**
      * @brief 查询响应信号
+     * @param response 查询响应数据
      */
     void queryResponse(const QueryResponse& response);
 
     /**
      * @brief 错误信号
+     * @param errorMessage 错误信息
      */
     void error(const QString& errorMessage);
 
     /**
      * @brief 连接状态变化信号
+     * @param status 当前状态
      */
     void connectionStatusChanged(const QString& status);
 
     /**
      * @brief TLS错误信号
+     * @param error SSL/TLS错误信息
      */
     void sslError(const QString& error);
 
@@ -155,6 +167,11 @@ private slots:
      */
     void onSslErrors(const QList<QSslError>& errors);
 
+    /**
+     * @brief 重试连接槽函数
+     */
+    void onRetryConnection();
+
 private:
     /**
      * @brief 处理接收到的消息
@@ -191,6 +208,16 @@ private:
      */
     void updateConnectionStatus(const QString& status);
 
+    /**
+     * @brief 尝试重新连接
+     */
+    void attemptReconnection();
+
+    /**
+     * @brief 重置重试计数器
+     */
+    void resetRetryCounter();
+
 private:
     QTcpSocket* socket_;                    // TCP套接字（可能是QSslSocket）
     QByteArray receiveBuffer_;               // 接收缓冲区
@@ -199,7 +226,12 @@ private:
     bool isAuthenticated_;                   // 是否已认证
     QTimer* heartbeatTimer_;                 // 心跳定时器
     int heartbeatInterval_;                  // 心跳间隔（毫秒）
-    int lastActivityTime_;                   // 最后活动时间
+    qint64 lastActivityTime_;                // 最后活动时间（修正类型）
+
+    // 重试机制
+    int maxRetries_;                         // 最大重试次数
+    int currentRetryCount_;                  // 当前重试次数
+    QTimer* retryTimer_;                     // 重试定时器
 
     // TLS/SSL 支持
     std::unique_ptr<FingerprintManager> fingerprintManager_;  // 指纹管理器

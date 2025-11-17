@@ -15,11 +15,11 @@ namespace qindb {
 /**
  * @brief 倒排索引项（Posting）
  *
- * 存储文档ID和词频信息
+ * 存储文档ID和词频信息，用于记录某个词在特定文档中的出现情况
  */
 struct Posting {
-    RowId docId;        // 文档ID（行ID）
-    uint32_t tf;        // 词频（Term Frequency）
+    RowId docId;        // 文档ID（行ID），唯一标识一个文档
+    uint32_t tf;        // 词频（Term Frequency），表示该词在文档中出现的次数
     QVector<uint32_t> positions;  // 词在文档中的位置（可选，用于短语查询）
 
     Posting() : docId(INVALID_ROW_ID), tf(0) {}

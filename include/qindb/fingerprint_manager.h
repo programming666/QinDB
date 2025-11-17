@@ -1,19 +1,20 @@
-#ifndef QINDB_FINGERPRINT_MANAGER_H
+#ifndef QINDB_FINGERPRINT_MANAGER_H  // 防止头文件重复包含
 #define QINDB_FINGERPRINT_MANAGER_H
 
-#include <QString>
-#include <QHash>
-#include <QMutex>
-#include <QSslCertificate>
-#include <functional>
+#include <QString>      // QString类头文件，用于处理字符串
+#include <QHash>        // QHash容器头文件，用于存储键值对
+#include <QMutex>       // QMutex互斥锁头文件，用于线程同步
+#include <QSslCertificate> // QSslCertificate类头文件，用于处理SSL证书
+#include <functional>   // functional头文件，用于支持函数对象
 
-namespace qindb {
+namespace qindb {  // 命名空间声明，避免命名冲突
 
 /**
- * @brief 指纹验证结果
+ * @brief 指纹验证结果枚举类
+ * 定义了证书指纹验证的四种可能状态
  */
 enum class FingerprintStatus {
-    TRUSTED,            // 已信任的指纹
+    TRUSTED,            // 已信任的指纹 - 之前验证并确认过的指纹
     UNKNOWN,            // 未知的指纹(需要用户确认)
     MISMATCH,           // 指纹不匹配(可能是MITM攻击)
     ERROR               // 错误

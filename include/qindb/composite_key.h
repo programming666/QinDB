@@ -1,13 +1,13 @@
-#ifndef QINDB_COMPOSITE_KEY_H
+#ifndef QINDB_COMPOSITE_KEY_H  // 防止头文件重复包含
 #define QINDB_COMPOSITE_KEY_H
 
-#include "common.h"
-#include <QVariant>
-#include <QVector>
-#include <QByteArray>
-#include <QDataStream>
+#include "common.h"             // 包含公共定义和类型
+#include <QVariant>             // Qt的通用值类型
+#include <QVector>              // Qt动态数组容器
+#include <QByteArray>           // Qt字节数组
+#include <QDataStream>          // Qt数据流
 
-namespace qindb {
+namespace qindb {              // 命名空间，防止命名冲突
 
 /**
  * @brief 复合键 - 用于多列索引

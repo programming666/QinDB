@@ -1,10 +1,10 @@
-#ifndef QINDB_PASSWORD_HASHER_H
+#ifndef QINDB_PASSWORD_HASHER_H  // 防止重复包含该头文件
 #define QINDB_PASSWORD_HASHER_H
 
-#include <QString>
-#include <QByteArray>
+#include <QString>    // Qt字符串类头文件
+#include <QByteArray> // Qt字节数组类头文件
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 /**
  * @brief 密码哈希工具类

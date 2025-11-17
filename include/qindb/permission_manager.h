@@ -1,22 +1,25 @@
-#ifndef QINDB_PERMISSION_MANAGER_H
+#ifndef QINDB_PERMISSION_MANAGER_H  // 防止重复包含的头文件保护宏
 #define QINDB_PERMISSION_MANAGER_H
 
-#include "common.h"
-#include "buffer_pool_manager.h"
-#include "catalog.h"
-#include <QDateTime>
-#include <QMutex>
+#include "common.h"          // 包含公共定义和类型
+#include "buffer_pool_manager.h"  // 包含缓冲池管理器相关定义
+#include "catalog.h"         // 包含目录管理相关定义
+#include <QDateTime>         // Qt日期时间类
+#include <QMutex>            // Qt互斥锁类
 #include <QString>
-#include <QStringList>
-#include <QVariant>
-#include <QVector>
-#include <vector>
-#include <optional>
+#include <QStringList>       // Qt字符串列表类
+#include <QVariant>          // Qt变体类型类
+#include <QVector>           // Qt向量容器类
+#include <vector>            // C++标准向量容器
+#include <optional>          // C++17可选值类型
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 /**
  * @brief 权限记录结构
+ * 
+ * 该结构体用于存储权限相关的所有信息，包括权限ID、用户名、数据库名、
+ * 表名、权限类型、是否可授予他人、授权时间和授权者等信息。
  */
 struct Permission {
     uint64_t id;                    // 权限ID

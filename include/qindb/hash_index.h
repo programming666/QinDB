@@ -12,7 +12,7 @@
 namespace qindb {
 
 /**
- * @brief 哈希索引
+ * @brief 哈希索引类
  *
  * 特点：
  * - 等值查询 O(1) 平均时间复杂度

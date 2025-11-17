@@ -9,11 +9,11 @@
 namespace qindb {
 
 // 前向声明
-class BufferPoolManager;
-class DiskManager;
+class BufferPoolManager;  // 缓冲池管理器的前向声明
+class DiskManager;       // 磁盘管理器的前向声明
 
 /**
- * @brief Catalog数据库存储后端
+ * @brief Catalog数据库存储后端类
  *
  * 负责将Catalog元数据存储到数据库的系统表中，
  * 而不是使用外部的catalog.json文件。

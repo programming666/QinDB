@@ -6,13 +6,13 @@
 
 namespace qindb {
 
-// Token 类型
+// Token 类型枚举，定义了所有可能的词法单元类型
 enum class TokenType {
-    // 字面值
-    INTEGER,
-    FLOAT,
-    STRING,
-    IDENTIFIER,
+    // 字面值类型
+    INTEGER,    // 整数字面值
+    FLOAT,      // 浮点数字面值
+    STRING,     // 字符串字面值
+    IDENTIFIER, // 标识符
 
     // 关键字
     SELECT, FROM, WHERE, INSERT, UPDATE, DELETE,

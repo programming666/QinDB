@@ -14,17 +14,17 @@ namespace qindb {
  *
  * 槽位数组存储在页头之后，每个槽位记录一个记录的偏移和长度
  */
-#pragma pack(push, 1)
+#pragma pack(push, 1)  // 设置1字节对齐，确保结构体紧凑排列
 struct Slot {
     uint16_t offset;    // 记录在页中的偏移
     uint16_t length;    // 记录长度
 };
-#pragma pack(pop)
+#pragma pack(pop)       // 恢复默认对齐方式
 
 /**
  * @brief 记录头（存储在每条记录前面）
  */
-#pragma pack(push, 1)
+#pragma pack(push, 1)  // 设置1字节对齐，确保结构体紧凑排列
 struct RecordHeader {
     RowId rowId;                    // 行ID (8 字节)
     TransactionId createTxnId;      // 创建该记录的事务ID (8 字节)
@@ -38,9 +38,9 @@ struct RecordHeader {
         , columnCount(0)
     {}
 };
-#pragma pack(pop)
+#pragma pack(pop)       // 恢复默认对齐方式
 
-static_assert(sizeof(RecordHeader) == 26, "RecordHeader must be 26 bytes");
+static_assert(sizeof(RecordHeader) == 26, "RecordHeader must be 26 bytes");  // 编译时断言，确保RecordHeader大小为26字节
 
 /**
  * @brief 表页管理器
@@ -69,7 +69,7 @@ public:
     /**
      * @brief 初始化表页
      */
-    static void init(Page* page, PageId pageId);
+    static void init(Page* page, PageId pageId);  // 初始化表页，设置页ID和初始状态
 
     /**
      * @brief 插入一条记录
@@ -125,7 +125,7 @@ public:
     /**
      * @brief 获取页中剩余可用空间
      */
-    static uint16_t getFreeSpace(Page* page);
+    static uint16_t getFreeSpace(Page* page);  // 返回页中剩余的可用空间大小
 
     /**
      * @brief 检查页是否有足够空间插入记录
@@ -134,13 +134,13 @@ public:
      * @param recordSize 需要插入的记录大小
      * @return 是否有足够空间
      */
-    static bool hasEnoughSpace(Page* page, uint16_t recordSize);
+    static bool hasEnoughSpace(Page* page, uint16_t recordSize);  // 检查页是否有足够空间插入指定大小的记录
 
     /**
      * @brief 计算记录需要的空间大小
      */
     static uint16_t calculateRecordSize(const TableDef* tableDef,
-                                       const QVector<QVariant>& values);
+                                       const QVector<QVariant>& values);  // 计算记录需要的空间大小
 
     /**
      * @brief 删除记录（逻辑删除：设置deleteTxnId）
@@ -150,7 +150,7 @@ public:
      * @param txnId 删除事务ID（默认为1）
      * @return 是否成功删除
      */
-    static bool deleteRecord(Page* page, int slotIndex, TransactionId txnId = 1);
+    static bool deleteRecord(Page* page, int slotIndex, TransactionId txnId = 1);  // 逻辑删除记录，设置deleteTxnId
 
     /**
      * @brief 更新记录（简化版本：删除旧记录，插入新记录）
@@ -181,7 +181,7 @@ public:
      * @brief 初始化表页（别名方法，供系统表使用）
      * @param page 页对象
      */
-    static void initialize(Page* page);
+    static void initialize(Page* page);  // 初始化表页的别名方法，供系统表使用
 
     /**
      * @brief 插入原始元组数据（无需 TableDef，供系统表使用）
@@ -190,14 +190,14 @@ public:
      * @param rowId 输出：分配的行ID
      * @return 是否成功
      */
-    static bool insertTuple(Page* page, const QByteArray& data, RowId* rowId);
+    static bool insertTuple(Page* page, const QByteArray& data, RowId* rowId);  // 插入原始元组数据，供系统表使用
 
     /**
      * @brief 获取槽位数量
      * @param page 页对象
      * @return 槽位数量
      */
-    static uint16_t getSlotCount(Page* page);
+    static uint16_t getSlotCount(Page* page);  // 获取页中的槽位数量
 
     /**
      * @brief 获取指定槽位的原始元组数据
@@ -206,7 +206,7 @@ public:
      * @param data 输出：元组数据
      * @return 是否成功
      */
-    static bool getTuple(Page* page, int slotIndex, QByteArray& data);
+    static bool getTuple(Page* page, int slotIndex, QByteArray& data);  // 获取指定槽位的原始元组数据
 
 private:
     /**
@@ -215,7 +215,7 @@ private:
     static bool serializeRecord(const TableDef* tableDef, RowId rowId,
                                const QVector<QVariant>& values,
                                QByteArray& output,
-                               TransactionId txnId = INVALID_TXN_ID);
+                               TransactionId txnId = INVALID_TXN_ID);  // 将记录序列化为字节流
 
     /**
      * @brief 反序列化记录（从字节流恢复为QVariant数组）

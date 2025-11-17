@@ -4,6 +4,10 @@
 
 namespace qindb {
 
+/**
+ * @brief 初始化哈希桶页面
+ * @param page 要初始化的页面指针
+ */
 void HashBucketPage::initialize(Page* page) {
     if (!page) {
         return;

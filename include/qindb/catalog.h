@@ -1,23 +1,25 @@
-#ifndef QINDB_CATALOG_H
+#ifndef QINDB_CATALOG_H  // 防止头文件重复包含
 #define QINDB_CATALOG_H
 
-#include "common.h"
-#include "row_id_index.h"
+#include "common.h"     // 包含通用定义和类型
+#include "row_id_index.h" // 包含行ID索引相关定义
 #include <QString>
-#include <QVector>
-#include <QHash>
-#include <QMutex>
-#include <memory>
+#include <QVector>      // Qt动态数组容器
+#include <QHash>        // Qt哈希表容器
+#include <QMutex>       // Qt互斥锁，用于线程同步
+#include <memory>       // 智能指针相关头文件
 
-namespace qindb {
+namespace qindb {      // 定义qindb命名空间，避免命名冲突
 
-// 前向声明
-class CatalogDbBackend;
-class BufferPoolManager;
-class DiskManager;
+// 前向声明，减少头文件依赖
+class CatalogDbBackend;  // 目录数据库后端类
+class BufferPoolManager; // 缓冲池管理器类
+class DiskManager;      // 磁盘管理器类
 
 /**
- * @brief 列定义
+ * @brief 列定义结构体
+ * 
+ * 用于定义数据库表中的列属性，包括列名、数据类型、长度等
  */
 struct ColumnDef {
     QString name;           // 列名

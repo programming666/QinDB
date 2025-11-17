@@ -1,14 +1,15 @@
-#ifndef QINDB_SERVER_H
+#ifndef QINDB_SERVER_H      // 防止头文件重复包含
 #define QINDB_SERVER_H
 
 #include <QtCore/QObject>
 #include <QtNetwork/QTcpServer>
 #include <QtCore/QVector>
 #include <QtCore/QSet>
-#include <memory>
+#include <memory>            // 智能指针
 
-namespace qindb {
+namespace qindb {           // qinDB命名空间
 
+// 前向声明，避免循环依赖
 class DatabaseManager;
 class AuthManager;
 class ClientConnection;

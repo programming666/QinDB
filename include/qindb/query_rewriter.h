@@ -1,14 +1,14 @@
-#ifndef QINDB_QUERY_REWRITER_H
+#ifndef QINDB_QUERY_REWRITER_H  // 防止头文件重复包含的宏定义
 #define QINDB_QUERY_REWRITER_H
 
-#include "ast.h"
-#include "common.h"
-#include <memory>
-#include <vector>
-#include <QSet>
-#include <QString>
+#include "ast.h"      // 引入抽象语法树相关的头文件
+#include "common.h"   // 引入通用定义和工具的头文件
+#include <memory>     // 引入智能指针相关的头文件
+#include <vector>     // 引入向量容器相关的头文件
+#include <QSet>       // 引入Qt集合类相关的头文件
+#include <QString>    // 引入Qt字符串类相关的头文件
 
-namespace qindb {
+namespace qindb {    // 定义qindb命名空间
 
 /**
  * @brief 查询重写引擎
@@ -21,8 +21,8 @@ namespace qindb {
  */
 class QueryRewriter {
 public:
-    QueryRewriter();
-    ~QueryRewriter();
+    QueryRewriter();    // 构造函数
+    ~QueryRewriter();   // 析构函数
 
     /**
      * @brief 重写 SELECT 语句
@@ -34,15 +34,15 @@ public:
     /**
      * @brief 启用/禁用特定优化
      */
-    void setPredicatePushdownEnabled(bool enabled) { predicatePushdownEnabled_ = enabled; }
-    void setConstantFoldingEnabled(bool enabled) { constantFoldingEnabled_ = enabled; }
-    void setColumnPruningEnabled(bool enabled) { columnPruningEnabled_ = enabled; }
-    void setSubqueryUnnesitingEnabled(bool enabled) { subqueryUnnesitingEnabled_ = enabled; }
+    void setPredicatePushdownEnabled(bool enabled) { predicatePushdownEnabled_ = enabled; }  // 设置谓词下推优化开关
+    void setConstantFoldingEnabled(bool enabled) { constantFoldingEnabled_ = enabled; }      // 设置常量折叠优化开关
+    void setColumnPruningEnabled(bool enabled) { columnPruningEnabled_ = enabled; }        // 设置列裁剪优化开关
+    void setSubqueryUnnesitingEnabled(bool enabled) { subqueryUnnesitingEnabled_ = enabled; } // 设置子查询展开优化开关
 
     /**
      * @brief 获取最后一次重写的统计信息
      */
-    struct RewriteStats {
+    struct RewriteStats {      // 重写统计信息结构体
         int predicatesPushedDown = 0;      // 下推的谓词数量
         int constantsFolded = 0;            // 折叠的常量表达式数量
         int columnsPruned = 0;              // 裁剪的列数量

@@ -1,17 +1,17 @@
-#ifndef QINDB_WAL_DB_BACKEND_H
+#ifndef QINDB_WAL_DB_BACKEND_H  // 防止重复包含该头文件
 #define QINDB_WAL_DB_BACKEND_H
 
-#include "common.h"
-#include "wal.h"
-#include <QString>
-#include <QVector>
-#include <memory>
+#include "common.h"  // 包含公共定义和类型
+#include "wal.h"     // 包含WAL相关的定义
+#include <QString>   // Qt字符串类
+#include <QVector>   // Qt动态数组类
+#include <memory>    // 智能指针相关头文件
 
 namespace qindb {
 
-// 前向声明
-class BufferPoolManager;
-class DiskManager;
+// 前向声明，避免包含完整定义
+class BufferPoolManager;  // 缓冲池管理器
+class DiskManager;        // 磁盘管理器
 
 /**
  * @brief WAL数据库存储后端

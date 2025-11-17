@@ -1,10 +1,15 @@
-#include "qindb/password_hasher.h"
-#include <QCryptographicHash>
-#include <QRandomGenerator>
-#include <QRegularExpression>
+#include "qindb/password_hasher.h"  // 包含密码哈希器类的头文件
+#include <QCryptographicHash>      // 包含Qt加密哈希功能
+#include <QRandomGenerator>        // 包含Qt随机数生成器
+#include <QRegularExpression>      // 包含Qt正则表达式支持
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
+/**
+ * @brief 对密码进行哈希处理
+ * @param password 要哈希的原始密码
+ * @return 返回Base64编码的哈希值，包含哈希值和盐值
+ */
 QString PasswordHasher::hashPassword(const QString& password) {
     // 生成随机Salt
     QByteArray salt = generateSalt(SALT_LENGTH);

@@ -1,26 +1,28 @@
-#ifndef QINDB_DATABASE_MANAGER_H
+#ifndef QINDB_DATABASE_MANAGER_H  // 防止头文件重复包含
 #define QINDB_DATABASE_MANAGER_H
 
-#include "common.h"
-#include "catalog.h"
-#include "buffer_pool_manager.h"
-#include "disk_manager.h"
-#include "wal.h"
-#include "transaction.h"
-#include "permission_manager.h"
-#include <QString>
-#include <QMutex>
-#include <QDir>
-#include <memory>
-#include <map>
+#include "common.h"      // 通用头文件
+#include "catalog.h"     // 目录管理相关
+#include "buffer_pool_manager.h"  // 缓冲池管理相关
+#include "disk_manager.h" // 磁盘管理相关
+#include "wal.h"         // 预写日志相关
+#include "transaction.h" // 事务相关
+#include "permission_manager.h"  // 权限管理相关
+#include <QString>       // Qt字符串类
+#include <QMutex>       // Qt互斥锁
+#include <QDir>         // Qt目录操作
+#include <memory>       // 智能指针
+#include <map>          // 映射容器
 
-namespace qindb {
+namespace qindb {      // 定义qindb命名空间
 
 /**
- * @brief 数据库定义
+ * @brief 数据库定义结构体
+ * 
+ * 该结构体定义了一个数据库的基本组成部分和组件
  */
 struct DatabaseDef {
-    QString name;                                   // 数据库名
+    QString name;                                   // 数据库名称
     QString path;                                   // 数据库目录路径
     std::unique_ptr<DiskManager> diskManager;       // 磁盘管理器 (必须在 bufferPool 之前声明，这样会在 bufferPool 之后析构)
     std::unique_ptr<Catalog> catalog;               // 元数据管理器

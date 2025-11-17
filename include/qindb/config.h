@@ -1,15 +1,15 @@
-#ifndef QINDB_CONFIG_H
+#ifndef QINDB_CONFIG_H  // 防止重复包含的头文件保护宏
 #define QINDB_CONFIG_H
 
-#include <QString>
-#include <QSettings>
-#include <QMutex>
-#include <memory>
+#include <QString>    // Qt字符串类
+#include <QSettings>  // Qt设置类，用于读写配置文件
+#include <QMutex>     // Qt互斥锁，用于线程同步
+#include <memory>     // 智能指针
 
-namespace qindb {
+namespace qindb {    // qinDB命名空间
 
 /**
- * @brief 配置管理器
+ * @brief 配置管理器类
  *
  * 负责读取和管理 qinDB 的配置选项
  * 配置文件: qindb.ini

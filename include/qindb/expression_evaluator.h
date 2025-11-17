@@ -1,13 +1,13 @@
-#ifndef QINDB_EXPRESSION_EVALUATOR_H
+#ifndef QINDB_EXPRESSION_EVALUATOR_H  // 防止头文件重复包含
 #define QINDB_EXPRESSION_EVALUATOR_H
 
-#include "qindb/ast.h"
-#include "qindb/catalog.h"
-#include <QVariant>
-#include <QVector>
-#include <memory>
+#include "qindb/ast.h"        // 包含AST抽象语法树相关定义
+#include "qindb/catalog.h"    // 包含数据库目录相关定义
+#include <QVariant>           // Qt的通用值类型
+#include <QVector>            // Qt的动态数组容器
+#include <memory>             // 智能指针相关头文件
 
-namespace qindb {
+namespace qindb {            // 声明qindb命名空间
 
 // Using declarations for AST types
 using ast::BinaryOp;

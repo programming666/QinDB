@@ -1,15 +1,15 @@
-#ifndef QINDB_BUFFER_POOL_MANAGER_H
+#ifndef QINDB_BUFFER_POOL_MANAGER_H  // 防止头文件重复包含
 #define QINDB_BUFFER_POOL_MANAGER_H
 
-#include "common.h"
-#include "page.h"
-#include "disk_manager.h"
-#include <QMutex>
-#include <QHash>
-#include <memory>
-#include <list>
+#include "common.h"          // 引入通用定义
+#include "page.h"            // 引入页相关定义
+#include "disk_manager.h"    // 引入磁盘管理器
+#include <QMutex>           // 引入互斥锁
+#include <QHash>            // 引入哈希表
+#include <memory>           // 引入智能指针
+#include <list>             // 引入链表
 
-namespace qindb {
+namespace qindb {           // 定义命名空间qindb
 
 /**
  * @brief 缓冲池帧（Buffer Pool Frame）
@@ -17,10 +17,10 @@ namespace qindb {
  * 缓冲池中的每个槽位，包含一个页和相关元数据
  */
 struct Frame {
-    Page* page;           // 页指针
-    PageId pageId;        // 页ID
-    bool isDirty;         // 脏页标志
-    int pinCount;         // 引用计数
+    Page* page;           // 页指针，指向实际存储数据的页
+    PageId pageId;        // 页ID，唯一标识一个页
+    bool isDirty;         // 脏页标志，表示页是否被修改
+    int pinCount;         // 引用计数，表示被访问的次数
     size_t lastAccessTime; // 最后访问时间（用于替换策略）
 
     Frame()
@@ -127,20 +127,20 @@ private:
     bool evictPage(PageId pageId);
 
     size_t poolSize_;                     // 缓冲池大小
-    std::vector<Frame> frames_;           // 帧数组
+    std::vector<Frame> frames_;           // 帧数组，存储缓冲池中的所有帧
     std::vector<Page*> pages_;            // 页对象池
     QHash<PageId, size_t> pageTable_;     // 页表：PageId -> Frame索引
 
     std::list<size_t> freeList_;          // 空闲帧列表
     size_t clockHand_;                    // Clock算法的时钟指针
 
-    DiskManager* diskManager_;            // 磁盘管理器
+    DiskManager* diskManager_;            // 磁盘管理器，负责磁盘I/O操作
 
     // 统计信息
-    mutable size_t hitCount_;
-    mutable size_t missCount_;
+    mutable size_t hitCount_;             // 缓存命中次数
+    mutable size_t missCount_;            // 缓存未命中次数
 
-    mutable QMutex mutex_;                // 全局锁
+    mutable QMutex mutex_;                // 全局锁，保证线程安全
 };
 
 } // namespace qindb

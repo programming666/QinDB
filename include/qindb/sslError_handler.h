@@ -1,20 +1,22 @@
-#ifndef QINDB_SSLERROR_HANDLER_H
+#ifndef QINDB_SSLERROR_HANDLER_H  // 防止头文件重复包含
 #define QINDB_SSLERROR_HANDLER_H
 
-#include <QSslError>
-#include <QSslCertificate>
-#include <QString>
-#include <QList>
+#include <QSslError>      // Qt SSL错误相关类
+#include <QSslCertificate> // Qt SSL证书相关类
+#include <QString>         // Qt字符串类
+#include <QList>          // Qt列表容器类
 
-namespace qindb {
+namespace qindb {  // 定义命名空间qindb
 
 /**
  * @brief SSL错误处理器 - 统一管理SSL错误处理逻辑
+ * 该类提供了SSL证书验证过程中的错误处理功能，包括错误分类、过滤和描述等
  */
 class SSLErrorHandler {
 public:
     /**
-     * @brief SSL错误严重级别
+     * @brief SSL错误严重级别枚举
+     * 定义了三种错误级别：可忽略、警告和严重
      */
     enum class ErrorSeverity {
         IGNORABLE,      // 可忽略(如自签名)

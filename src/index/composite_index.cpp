@@ -1,7 +1,7 @@
-#include "qindb/composite_index.h"
-#include "qindb/logger.h"
+#include "qindb/composite_index.h"  // 包含复合索引头文件
+#include "qindb/logger.h"          // 包含日志记录头文件
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 CompositeIndex::CompositeIndex(BufferPoolManager* bufferPoolManager,
                               const QVector<DataType>& columnTypes,

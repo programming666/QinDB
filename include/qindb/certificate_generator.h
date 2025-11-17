@@ -1,24 +1,25 @@
-#ifndef QINDB_CERTIFICATE_GENERATOR_H
+#ifndef QINDB_CERTIFICATE_GENERATOR_H  // 防止头文件重复包含
 #define QINDB_CERTIFICATE_GENERATOR_H
 
-#include <QString>
-#include <QSslCertificate>
-#include <QSslKey>
-#include <QPair>
+#include <QString>    // Qt字符串类
+#include <QSslCertificate>  // Qt SSL证书类
+#include <QSslKey>    // Qt SSL密钥类
+#include <QPair>      // Qt键值对容器
 
-namespace qindb {
+namespace qindb {  // 命名空间声明
 
 /**
  * @brief 证书生成器 - 用于生成自签名TLS证书
+ * 这个类提供了生成、保存、加载SSL证书和私钥的功能，以及一些辅助方法
  */
 class CertificateGenerator {
 public:
     /**
      * @brief 生成自签名证书和私钥
      * @param commonName 证书通用名称(CN)
-     * @param organization 组织名称
-     * @param validityDays 证书有效期(天)
-     * @return QPair<证书, 私钥>
+     * @param organization 组织名称，默认为"QinDB"
+     * @param validityDays 证书有效期(天)，默认为365天
+     * @return QPair<证书, 私钥> 返回生成的证书和私钥对
      */
     static QPair<QSslCertificate, QSslKey> generateSelfSignedCertificate(
         const QString& commonName,

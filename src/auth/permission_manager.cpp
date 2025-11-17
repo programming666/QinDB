@@ -1,11 +1,11 @@
-#include "qindb/permission_manager.h"
-#include "qindb/logger.h"
+#include "qindb/permission_manager.h"  // 包含权限管理器头文件
+#include "qindb/logger.h"            // 包含日志系统头文件
 #include "qindb/table_page.h"
-#include <QDateTime>
-#include <QMutexLocker>
-#include <algorithm>
+#include <QDateTime>                 // Qt日期时间处理
+#include <QMutexLocker>             // Qt互斥锁保护
+#include <algorithm>                 // STL算法库
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 PermissionManager::PermissionManager(BufferPoolManager* bufferPool,
                                      Catalog* catalog,

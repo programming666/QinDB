@@ -1,16 +1,16 @@
-#ifndef QINDB_QUERY_CACHE_H
+#ifndef QINDB_QUERY_CACHE_H  // 防止头文件重复包含
 #define QINDB_QUERY_CACHE_H
 
-#include "qindb/common.h"
-#include "qindb/query_result.h"
-#include <QHash>
-#include <QString>
-#include <QMutex>
-#include <QDateTime>
-#include <QSet>
-#include <QVariant>
+#include "qindb/common.h"      // 包含公共定义和类型
+#include "qindb/query_result.h" // 包含查询结果相关的定义
+#include <QHash>              // Qt的哈希表容器
+#include <QString>            // Qt的字符串类
+#include <QMutex>             // Qt的互斥锁，用于线程同步
+#include <QDateTime>          // Qt的日期时间类
+#include <QSet>               // Qt的集合容器
+#include <QVariant>           // Qt的通用值类型
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 /**
  * @brief 缓存条目结构
@@ -26,10 +26,10 @@ struct CacheEntry {
     uint64_t memorySizeBytes;     // 估算的内存占用（字节）
 
     CacheEntry()
-        : createdAt(QDateTime::currentDateTime())
-        , lastAccessedAt(QDateTime::currentDateTime())
-        , accessCount(0)
-        , memorySizeBytes(0) {}
+        : createdAt(QDateTime::currentDateTime())  // 初始化创建时间为当前时间
+        , lastAccessedAt(QDateTime::currentDateTime()) // 初始化最后访问时间为当前时间
+        , accessCount(0)  // 初始化访问次数为0
+        , memorySizeBytes(0) {} // 初始化内存占用为0
 };
 
 /**
@@ -65,7 +65,7 @@ public:
                        uint64_t maxMemoryMB = 100,
                        uint64_t ttlSeconds = 300);
 
-    ~QueryCache();
+    ~QueryCache();  // 析构函数
 
     /**
      * @brief 查找缓存的查询结果
@@ -122,10 +122,10 @@ public:
 
         Statistics()
             : totalEntries(0), totalHits(0), totalMisses(0),
-              totalEvictions(0), totalMemoryBytes(0), hitRate(0.0) {}
+              totalEvictions(0), totalMemoryBytes(0), hitRate(0.0) {}  // 初始化所有统计值为0
     };
 
-    Statistics getStatistics() const;
+    Statistics getStatistics() const;  // 获取缓存统计信息
 
     /**
      * @brief 启用/禁用查询缓存
@@ -186,15 +186,15 @@ private:
     bool enabled_;                // 是否启用缓存
 
     // 统计信息
-    mutable uint64_t totalHits_;
-    mutable uint64_t totalMisses_;
-    mutable uint64_t totalEvictions_;
-    mutable uint64_t totalMemoryBytes_;
+    mutable uint64_t totalHits_;      // 缓存命中次数
+    mutable uint64_t totalMisses_;    // 缓存未命中次数
+    mutable uint64_t totalEvictions_; // 缓存驱逐次数
+    mutable uint64_t totalMemoryBytes_; // 总内存占用（字节）
 
     // 线程安全锁
-    mutable QMutex mutex_;
+    mutable QMutex mutex_;  // 互斥锁，保证线程安全
 };
 
 } // namespace qindb
 
-#endif // QINDB_QUERY_CACHE_H
+#endif // QINDB_QUERY_CACHE_H  // 结束头文件包含保护

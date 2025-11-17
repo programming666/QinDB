@@ -1,20 +1,20 @@
-#ifndef QINDB_EXECUTOR_H
+#ifndef QINDB_EXECUTOR_H  // 防止头文件重复包含
 #define QINDB_EXECUTOR_H
 
-#include "common.h"
-#include "ast.h"
-#include "catalog.h"
-#include "buffer_pool_manager.h"
-#include "disk_manager.h"
-#include "database_manager.h"
-#include "expression_evaluator.h"
-#include "auth_manager.h"
-#include "query_result.h"
-#include <QString>
-#include <QVector>
-#include <memory>
+#include "common.h"      // 包含公共定义和类型
+#include "ast.h"         // 包含抽象语法树相关的类和定义
+#include "catalog.h"     // 包含目录管理相关的类
+#include "buffer_pool_manager.h"  // 包含缓冲池管理器
+#include "disk_manager.h" // 包含磁盘管理器
+#include "database_manager.h"    // 包含数据库管理器
+#include "expression_evaluator.h" // 包含表达式求值器
+#include "auth_manager.h" // 包含认证管理器
+#include "query_result.h" // 包含查询结果相关的类
+#include <QString>       // Qt字符串类
+#include <QVector>       // Qt动态数组类
+#include <memory>        // 智能指针相关的头文件
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 // Forward declaration
 class QueryRewriter;
@@ -290,9 +290,19 @@ private:
     QueryResult createErrorResult(ErrorCode code, const QString& message);
 
     /**
+     * @brief 创建错误结果（带当前数据库信息）
+     */
+    QueryResult createErrorResult(ErrorCode code, const QString& message, const QString& currentDatabase);
+
+    /**
      * @brief 创建成功结果
      */
     QueryResult createSuccessResult(const QString& message);
+
+    /**
+     * @brief 创建成功结果（带当前数据库信息）
+     */
+    QueryResult createSuccessResult(const QString& message, const QString& currentDatabase);
     /**
      * @brief 格式化执行计划用于EXPLAIN输出
      */

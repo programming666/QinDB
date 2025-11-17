@@ -1,11 +1,11 @@
 #ifndef QINDB_KEY_COMPARATOR_H
 #define QINDB_KEY_COMPARATOR_H
 
-#include "common.h"
-#include <QVariant>
-#include <QByteArray>
+#include "common.h"  // 引入公共定义
+#include <QVariant>  // 引入Qt的变量类型类
+#include <QByteArray> // 引入Qt的字节数组类
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 /**
  * @brief 键比较器 - 为所有数据类型提供比较功能

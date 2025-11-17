@@ -1,28 +1,41 @@
-#include "qindb/catalog.h"
-#include "qindb/catalog_db_backend.h"
-#include "qindb/logger.h"
-#include "qindb/config.h"
-#include <QFile>
-#include <QDataStream>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonArray>
+#include "qindb/catalog.h"          // 包含目录类的头文件
+#include "qindb/catalog_db_backend.h"  // 包含目录数据库后端的头文件
+#include "qindb/logger.h"          // 包含日志系统的头文件
+#include "qindb/config.h"          // 包含配置系统的头文件
+#include <QFile>                   // 包含Qt文件操作类
+#include <QDataStream>            // 包含Qt数据流操作类
+#include <QJsonDocument>          // 包含Qt JSON文档类
+#include <QJsonObject>            // 包含Qt JSON对象类
+#include <QJsonArray>             // 包含Qt JSON数组类
 
 namespace qindb {
 
+/**
+ * @brief Catalog类的构造函数
+ * 初始化目录对象，并根据配置设置持久化模式（数据库或文件）
+ */
 Catalog::Catalog()
-    : useDatabase_(false)
+    : useDatabase_(false)         // 初始化使用数据库标志为false
 {
     // 从配置读取持久化模式
     useDatabase_ = !Config::instance().isCatalogUseFile();
     LOG_INFO(QString("Catalog initialized (mode: %1)")
-        .arg(useDatabase_ ? "database" : "file"));
+        .arg(useDatabase_ ? "database" : "file"));  // 记录初始化模式
 }
 
+/**
+ * @brief Catalog类的析构函数
+ * 销毁目录对象并记录日志
+ */
 Catalog::~Catalog() {
-    LOG_INFO("Catalog destroyed");
+    LOG_INFO("Catalog destroyed");  // 记录销毁信息
 }
 
+/**
+ * @brief 设置数据库后端
+ * @param bufferPool 缓冲池管理器指针
+ * @param diskManager 磁盘管理器指针
+ */
 void Catalog::setDatabaseBackend(BufferPoolManager* bufferPool, DiskManager* diskManager) {
     QMutexLocker locker(&mutex_);
 

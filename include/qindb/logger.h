@@ -1,20 +1,20 @@
-#ifndef QINDB_LOGGER_H
+#ifndef QINDB_LOGGER_H  // 防止重复包含该头文件
 #define QINDB_LOGGER_H
 
-#include "common.h"
-#include <QMutex>
-#include <QFile>
-#include <QTextStream>
-#include <QDateTime>
+#include "common.h"  // 包含项目公共头文件
+#include <QMutex>    // 包含Qt互斥锁类，用于线程同步
+#include <QFile>     // 包含Qt文件操作类，用于日志文件写入
+#include <QTextStream>  // 包含Qt文本流类，用于文本格式化输出
+#include <QDateTime>  // 包含Qt日期时间类，用于获取时间戳
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
-// 日志级别
+// 日志级别枚举类，定义了四种日志级别
 enum class LogLevel {
-    DEBUG = 0,
-    INFO = 1,
-    WARN = 2,
-    ERROR = 3
+    DEBUG = 0,  // 调试级别，最低级别
+    INFO = 1,   // 信息级别
+    WARN = 2,   // 警告级别
+    ERROR = 3   // 错误级别，最高级别
 };
 
 // 日志系统 (单例)

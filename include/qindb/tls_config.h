@@ -1,16 +1,17 @@
-#ifndef QINDB_TLS_CONFIG_H
+#ifndef QINDB_TLS_CONFIG_H  // 防止头文件重复包含
 #define QINDB_TLS_CONFIG_H
 
-#include <QString>
-#include <QSslCertificate>
-#include <QSslKey>
-#include <QSslConfiguration>
-#include <QSsl>
+#include <QString>          // Qt字符串类
+#include <QSslCertificate>   // Qt SSL证书类
+#include <QSslKey>          // Qt SSL密钥类
+#include <QSslConfiguration> // Qt SSL配置类
+#include <QSsl>             // Qt SSL相关枚举和类型
 
-namespace qindb {
+namespace qindb {          // 定义qindb命名空间
 
 /**
- * @brief TLS验证模式
+ * @brief TLS验证模式枚举类
+ * 定义了TLS连接中的证书验证方式
  */
 enum class TLSVerifyMode {
     NONE,              // 不验证对方证书
@@ -21,6 +22,7 @@ enum class TLSVerifyMode {
 
 /**
  * @brief TLS配置类 - 统一管理TLS相关配置
+ * 提供了证书管理、验证模式设置、SSL配置生成等功能
  */
 class TLSConfig {
 public:

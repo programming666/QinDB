@@ -1,29 +1,29 @@
-#ifndef QINDB_COST_MODEL_H
+#ifndef QINDB_COST_MODEL_H  // 防止重复包含的头文件保护宏
 #define QINDB_COST_MODEL_H
 
-#include "qindb/common.h"
-#include "qindb/statistics.h"
-#include <QString>
+#include "qindb/common.h"    // 引入公共定义
+#include "qindb/statistics.h" // 引入统计信息相关定义
+#include <QString>           // 引入Qt字符串类
 
-namespace qindb {
+namespace qindb {  // 定义命名空间 qindb
 
 /**
  * @brief 成本估算参数
  *
- * 定义各种操作的成本系数
+ * 定义各种操作的成本系数，用于查询优化器估算执行计划成本
  */
 struct CostParams {
-    // I/O 成本
+    // I/O 成本相关参数
     double seqPageReadCost = 1.0;      // 顺序页面读取成本
     double randomPageReadCost = 4.0;   // 随机页面读取成本
     double pageWriteCost = 2.0;        // 页面写入成本
 
-    // CPU 成本
+    // CPU 成本相关参数
     double tupleProcessCost = 0.01;    // 处理一条记录的成本
     double operatorCost = 0.005;       // 运算符计算成本
     double indexSearchCost = 0.02;     // 索引查找成本
 
-    // 内存成本
+    // 内存成本相关参数
     double memoryUseCost = 0.0001;     // 内存使用成本（每字节）
 
     // 网络成本（未来使用）

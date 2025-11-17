@@ -1,15 +1,16 @@
-#ifndef QINDB_STATISTICS_H
+#ifndef QINDB_STATISTICS_H  // 防止重复包含此头文件
 #define QINDB_STATISTICS_H
 
-#include "qindb/common.h"
-#include <QVector>
-#include <QMap>
-#include <QString>
-#include <QVariant>
-#include <memory>
+#include "qindb/common.h"  // 引入项目公共头文件
+#include <QVector>        // 引入Qt向量容器
+#include <QMap>           // 引入Qt映射容器
+#include <QString>        // 引入Qt字符串类
+#include <QVariant>       // 引入Qt变体类，可以存储各种类型的数据
+#include <memory>         // 引入智能指针相关头文件
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
+// 前置声明，避免循环依赖
 class Catalog;
 class BufferPoolManager;
 
@@ -36,8 +37,8 @@ struct ColumnStats {
     // 最常见值（Most Common Values, MCV）
     QHash<QString, size_t> mcv;      // 值的字符串表示 → 出现次数
 
-    ColumnStats() = default;
-    ColumnStats(const QString& name, DataType type)
+    ColumnStats() = default;         // 默认构造函数
+    ColumnStats(const QString& name, DataType type)  // 带参数的构造函数
         : columnName(name), dataType(type) {}
 };
 
@@ -57,8 +58,8 @@ struct TableStats {
     // 索引统计
     QMap<QString, size_t> indexSizes;            // 索引名 → 索引大小（页面数）
 
-    TableStats() = default;
-    explicit TableStats(const QString& name) : tableName(name) {}
+    TableStats() = default;                      // 默认构造函数
+    explicit TableStats(const QString& name) : tableName(name) {}  // 带参数的构造函数
 
     // 获取列统计
     const ColumnStats* getColumnStats(const QString& columnName) const {
@@ -82,8 +83,8 @@ struct TableStats {
  */
 class StatisticsCollector {
 public:
-    StatisticsCollector(Catalog* catalog, BufferPoolManager* bufferPool);
-    ~StatisticsCollector() = default;
+    StatisticsCollector(Catalog* catalog, BufferPoolManager* bufferPool);  // 构造函数
+    ~StatisticsCollector() = default;  // 默认析构函数
 
     // 收集表的统计信息
     bool collectTableStats(const QString& tableName);
@@ -107,8 +108,8 @@ public:
     bool loadStats(const QString& filePath);
 
 private:
-    Catalog* catalog_;
-    BufferPoolManager* bufferPool_;
+    Catalog* catalog_;                    // 目录管理器指针
+    BufferPoolManager* bufferPool_;       // 缓冲池管理器指针
 
     QMap<QString, TableStats> tableStats_;  // 表名 → 表统计信息
 
@@ -131,4 +132,4 @@ private:
 
 } // namespace qindb
 
-#endif // QINDB_STATISTICS_H
+#endif // QINDB_STATISTICS_H  // 结束头文件包含保护

@@ -1,3 +1,7 @@
+/**
+ * @file config.cpp
+ * @brief 配置管理类的实现，负责加载、保存和管理系统配置
+ */
 #include "qindb/config.h"
 #include "qindb/logger.h"
 #include <QFile>
@@ -6,11 +10,18 @@
 
 namespace qindb {
 
+/**
+ * @brief 获取Config类的单例实例
+ * @return Config类的引用
+ */
 Config& Config::instance() {
     static Config instance;
     return instance;
 }
 
+/**
+ * @brief Config类的构造函数，加载默认配置
+ */
 Config::Config() {
     loadDefaults();
 }

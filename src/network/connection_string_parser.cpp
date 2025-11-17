@@ -73,7 +73,8 @@ void ConnectionStringParser::parseQueryParams(const QString& query, ConnectionPa
         QString key = match.captured(1);
         QString value = match.captured(2);
         
-        if (key == "usr") {
+        // 支持 usr 和 user 两种参数名
+        if (key == "usr" || key == "user") {
             params.username = value;
         } else if (key == "pswd") {
             params.password = value;

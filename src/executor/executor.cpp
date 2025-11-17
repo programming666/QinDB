@@ -1,3 +1,15 @@
+/**
+ * @file executor.cpp
+ * @brief SQL执行器实现文件
+ *
+ * 本文件实现了数据库查询执行器的核心功能，包括：
+ * - DDL操作（CREATE/DROP TABLE/DATABASE/INDEX）
+ * - DML操作（SELECT/INSERT/UPDATE/DELETE）
+ * - 事务管理（BEGIN/COMMIT/ROLLBACK）
+ * - 用户和权限管理
+ * - 查询优化和缓存
+ */
+
 #include "qindb/executor.h"
 #include "qindb/logger.h"
 #include "qindb/table_page.h"
@@ -22,6 +34,15 @@ namespace qindb {
 
 using namespace ast;  // 使用AST命名空间
 
+/**
+ * @brief 构造函数 - 初始化执行器
+ * @param dbManager 数据库管理器指针
+ *
+ * 初始化以下组件：
+ * - 查询重写器（用于查询优化）
+ * - 查询缓存（用于缓存查询结果）
+ * - 表级缓存（用于缓存小表数据）
+ */
 Executor::Executor(DatabaseManager* dbManager)
     : dbManager_(dbManager)
     , queryRewriter_(std::make_unique<QueryRewriter>())
@@ -32,16 +53,32 @@ Executor::Executor(DatabaseManager* dbManager)
     LOG_INFO("Executor initialized with query rewriter, query cache and table cache");
 }
 
+/**
+ * @brief 析构函数 - 清理执行器资源
+ */
 Executor::~Executor() {
     LOG_INFO("Executor destroyed");
 }
 
+/**
+ * @brief 执行SQL语句的主入口函数
+ * @param ast 抽象语法树节点
+ * @return QueryResult 查询执行结果
+ *
+ * 该函数根据AST节点类型分发到相应的执行函数：
+ * 1. 数据库操作（CREATE/DROP/USE/SHOW DATABASE）
+ * 2. 表操作（CREATE/DROP TABLE, INSERT/SELECT/UPDATE/DELETE）
+ * 3. 索引操作（CREATE/DROP INDEX）
+ * 4. 事务操作（BEGIN/COMMIT/ROLLBACK）
+ * 5. 用户和权限管理（CREATE/DROP USER, GRANT/REVOKE）
+ * 6. 维护操作（VACUUM/ANALYZE/EXPLAIN）
+ */
 QueryResult Executor::execute(const std::unique_ptr<ASTNode>& ast) {
     if (!ast) {
         return createErrorResult(ErrorCode::INTERNAL_ERROR, "Null AST node");
     }
 
-    // 数据库操作（不需要当前数据库）
+    // ========== 数据库级操作（不需要选择当前数据库） ==========
     if (auto* createDBStmt = dynamic_cast<const CreateDatabaseStatement*>(ast.get())) {
         return executeCreateDatabase(createDBStmt);
     }
@@ -55,13 +92,16 @@ QueryResult Executor::execute(const std::unique_ptr<ASTNode>& ast) {
         return executeShowDatabases(showDBsStmt);
     }
 
-    // 表操作（使用 dynamic_cast 确定语句类型并执行）
+    // ========== 表级操作（需要先选择数据库） ==========
+    // DDL操作
     if (auto* createStmt = dynamic_cast<const CreateTableStatement*>(ast.get())) {
         return executeCreateTable(createStmt);
     }
     if (auto* dropStmt = dynamic_cast<const DropTableStatement*>(ast.get())) {
         return executeDropTable(dropStmt);
     }
+    
+    // DML操作 - 需要权限检查
     if (auto* insertStmt = dynamic_cast<const InsertStatement*>(ast.get())) {
         QueryResult permError;
         if (!ensurePermission(dbManager_->currentDatabaseName(), insertStmt->tableName, PermissionType::INSERT, permError)) {
@@ -90,18 +130,24 @@ QueryResult Executor::execute(const std::unique_ptr<ASTNode>& ast) {
         }
         return executeDelete(deleteStmt);
     }
+    
+    // 查询操作
     if (dynamic_cast<const ast::ShowTablesStatement*>(ast.get())) {
         return executeShowTables();
     }
     if (dynamic_cast<const SaveStatement*>(ast.get())) {
         return executeSave();
     }
+    
+    // ========== 索引操作 ==========
     if (auto* createIndexStmt = dynamic_cast<const CreateIndexStatement*>(ast.get())) {
         return executeCreateIndex(createIndexStmt);
     }
     if (auto* dropIndexStmt = dynamic_cast<const DropIndexStatement*>(ast.get())) {
         return executeDropIndex(dropIndexStmt);
     }
+    
+    // ========== 维护操作 ==========
     if (auto* vacuumStmt = dynamic_cast<const VacuumStatement*>(ast.get())) {
         return executeVacuum(vacuumStmt);
     }
@@ -111,6 +157,8 @@ QueryResult Executor::execute(const std::unique_ptr<ASTNode>& ast) {
     if (auto* explainStmt = dynamic_cast<const ExplainStatement*>(ast.get())) {
         return executeExplain(explainStmt);
     }
+    
+    // ========== 事务操作 ==========
     if (auto* beginStmt = dynamic_cast<const BeginTransactionStatement*>(ast.get())) {
         return executeBegin(beginStmt);
     }
@@ -121,7 +169,7 @@ QueryResult Executor::execute(const std::unique_ptr<ASTNode>& ast) {
         return executeRollback(rollbackStmt);
     }
 
-    // 用户管理操作
+    // ========== 用户管理操作 ==========
     if (auto* createUserStmt = dynamic_cast<const CreateUserStatement*>(ast.get())) {
         return executeCreateUser(createUserStmt);
     }
@@ -132,7 +180,7 @@ QueryResult Executor::execute(const std::unique_ptr<ASTNode>& ast) {
         return executeAlterUser(alterUserStmt);
     }
 
-    // 权限管理操作
+    // ========== 权限管理操作 ==========
     if (auto* grantStmt = dynamic_cast<const GrantStatement*>(ast.get())) {
         return executeGrant(grantStmt);
     }
@@ -140,6 +188,7 @@ QueryResult Executor::execute(const std::unique_ptr<ASTNode>& ast) {
         return executeRevoke(revokeStmt);
     }
 
+    // 未实现的语句类型
     return createErrorResult(ErrorCode::NOT_IMPLEMENTED,
                             QString("Statement type not implemented"));
 }
@@ -2038,10 +2087,31 @@ QueryResult Executor::createErrorResult(ErrorCode code, const QString& message) 
     return result;
 }
 
+QueryResult Executor::createErrorResult(ErrorCode code, const QString& message, const QString& currentDatabase) {
+    QueryResult result;
+    result.success = false;
+    result.error = Error(code, message);
+    result.message = message;
+    result.currentDatabase = currentDatabase;
+
+    LOG_ERROR(message);
+
+    return result;
+}
+
 QueryResult Executor::createSuccessResult(const QString& message) {
     QueryResult result;
     result.success = true;
     result.message = message;
+
+    return result;
+}
+
+QueryResult Executor::createSuccessResult(const QString& message, const QString& currentDatabase) {
+    QueryResult result;
+    result.success = true;
+    result.message = message;
+    result.currentDatabase = currentDatabase;
 
     return result;
 }
@@ -2063,7 +2133,15 @@ QueryResult Executor::executeCreateDatabase(const CreateDatabaseStatement* stmt)
                                 dbManager_->lastError().message);
     }
 
-    return createSuccessResult(QString("Database '%1' created").arg(stmt->databaseName));
+    QString message = QString("Database '%1' created").arg(stmt->databaseName);
+    QString currentDb = dbManager_->currentDatabaseName();
+    
+    // 如果当前数据库是刚创建的数据库，设置 currentDatabase 字段
+    if (currentDb == stmt->databaseName) {
+        return createSuccessResult(message, currentDb);
+    }
+    
+    return createSuccessResult(message);
 }
 
 QueryResult Executor::executeDropDatabase(const DropDatabaseStatement* stmt) {
@@ -2083,7 +2161,15 @@ QueryResult Executor::executeDropDatabase(const DropDatabaseStatement* stmt) {
                                 dbManager_->lastError().message);
     }
 
-    return createSuccessResult(QString("Database '%1' dropped").arg(stmt->databaseName));
+    QString message = QString("Database '%1' dropped").arg(stmt->databaseName);
+    QString currentDb = dbManager_->currentDatabaseName();
+    
+    // 如果被删除的数据库是当前使用的数据库，设置 currentDatabase 为空字符串
+    if (currentDb == stmt->databaseName) {
+        return createSuccessResult(message, QString());  // 当前数据库已被删除
+    }
+    
+    return createSuccessResult(message);
 }
 
 QueryResult Executor::executeUseDatabase(const UseDatabaseStatement* stmt) {
@@ -2095,12 +2181,14 @@ QueryResult Executor::executeUseDatabase(const UseDatabaseStatement* stmt) {
 
     if (!dbManager_->useDatabase(stmt->databaseName)) {
         return createErrorResult(ErrorCode::TABLE_NOT_FOUND,
-                                dbManager_->lastError().message);
+                                dbManager_->lastError().message,
+                                stmt->databaseName);
     }
 
     permissionManager_ = dbManager_->getCurrentPermissionManager();
 
-    return createSuccessResult(QString("Switched to database '%1'").arg(stmt->databaseName));
+    return createSuccessResult(QString("Switched to database '%1'").arg(stmt->databaseName),
+                               stmt->databaseName);
 }
 
 QueryResult Executor::executeShowDatabases(const ShowDatabasesStatement* stmt) {

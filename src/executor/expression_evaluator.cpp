@@ -1,19 +1,36 @@
-#include "qindb/expression_evaluator.h"
-#include "qindb/logger.h"
+#include "qindb/expression_evaluator.h"  // 包含表达式求值器的头文件
+#include "qindb/logger.h"                // 包含日志记录器的头文件
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
+/**
+ * @brief 构造函数，初始化表达式求值器
+ * @param catalog 目录指针，用于访问数据库元数据
+ */
 ExpressionEvaluator::ExpressionEvaluator(const Catalog* catalog)
     : catalog_(catalog)
 {
 }
 
+/**
+ * @brief 析构函数，使用默认实现
+ */
 ExpressionEvaluator::~ExpressionEvaluator() = default;
 
+/**
+ * @brief 评估表达式
+ * @param expr 要评估的表达式指针
+ * @return 评估结果，QVariant类型
+ */
 QVariant ExpressionEvaluator::evaluate(const ast::Expression* expr) {
     return evaluateWithRow(expr, nullptr, QVector<QVariant>());
 }
 
+/**
+ * @brief 评估表达式列表
+ * @param exprs 表达式列表
+ * @return 评估结果列表，如果出错则返回空列表
+ */
 QVector<QVariant> ExpressionEvaluator::evaluateList(
     const std::vector<std::unique_ptr<ast::Expression>>& exprs) {
     QVector<QVariant> results;

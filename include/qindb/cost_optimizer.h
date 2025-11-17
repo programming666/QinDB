@@ -11,26 +11,28 @@
 
 namespace qindb {
 
+// 前向声明 Catalog 类
 class Catalog;
 
 /**
  * @brief 执行计划节点
  *
- * 表示查询执行计划的一个节点
+ * 表示查询执行计划的一个节点，可以是表扫描、索引扫描、连接等操作
  */
 struct PlanNode {
-    PlanNodeType nodeType;                    // 节点类型
+    PlanNodeType nodeType;                    // 节点类型（表扫描、索引扫描、连接等）
     CostEstimate cost;                        // 成本估算
     QString tableName;                        // 表名（用于扫描节点）
     QString indexName;                        // 索引名（用于索引扫描）
-    std::vector<std::unique_ptr<PlanNode>> children;  // 子节点
+    std::vector<std::unique_ptr<PlanNode>> children;  // 子节点列表
 
-    // 连接相关
-    QString joinColumn;                       // 连接列
+    // 连接相关属性
+    QString joinColumn;                       // 连接列名
 
     // 过滤条件
-    std::unique_ptr<ast::Expression> filter;  // WHERE 条件
+    std::unique_ptr<ast::Expression> filter;  // WHERE 条件表达式
 
+    // 构造函数
     PlanNode(PlanNodeType type) : nodeType(type) {}
 
     // 添加子节点

@@ -1,11 +1,11 @@
-#ifndef QINDB_VISIBILITY_CHECKER_H
+#ifndef QINDB_VISIBILITY_CHECKER_H  // 防止头文件重复包含
 #define QINDB_VISIBILITY_CHECKER_H
 
-#include "common.h"
-#include "transaction.h"
-#include "table_page.h"
+#include "common.h"      // 包含公共定义和类型
+#include "transaction.h" // 包含事务相关定义
+#include "table_page.h"  // 包含表页相关定义
 
-namespace qindb {
+namespace qindb {  // 定义命名空间qindb
 
 /**
  * @brief MVCC可见性检查器
@@ -38,7 +38,7 @@ public:
     bool isVisible(const RecordHeader& header, TransactionId currentTxnId);
 
 private:
-    TransactionManager* txnMgr_;
+    TransactionManager* txnMgr_;  // 事务管理器指针，用于检查事务状态
 
     /**
      * @brief 检查事务是否已提交
@@ -64,4 +64,4 @@ private:
 
 } // namespace qindb
 
-#endif // QINDB_VISIBILITY_CHECKER_H
+#endif // QINDB_VISIBILITY_CHECKER_H  // 结束头文件包含保护

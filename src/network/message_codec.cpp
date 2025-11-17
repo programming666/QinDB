@@ -319,6 +319,39 @@ std::optional<QueryResponse> MessageCodec::decodeQueryResponse(const QByteArray&
     return result;
 }
 
+// ========== DATABASE_SWITCH 编解码 ==========
+
+QByteArray MessageCodec::encodeDatabaseSwitch(const DatabaseSwitchMessage& message) {
+    QByteArray payload;
+    QDataStream stream(&payload, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+
+    // 数据库名
+    encodeString(stream, message.databaseName);
+
+    return encodeMessage(MessageType::DATABASE_SWITCH, payload);
+}
+
+std::optional<DatabaseSwitchMessage> MessageCodec::decodeDatabaseSwitch(const QByteArray& payload) {
+    if (payload.isEmpty()) {
+        return std::nullopt;
+    }
+
+    QDataStream stream(payload);
+    stream.setByteOrder(QDataStream::BigEndian);
+
+    DatabaseSwitchMessage message;
+
+    // 数据库名
+    message.databaseName = decodeString(stream);
+
+    if (stream.status() != QDataStream::Ok) {
+        return std::nullopt;
+    }
+
+    return message;
+}
+
 // ========== ERROR_RESPONSE 编解码 ==========
 
 QByteArray MessageCodec::encodeErrorResponse(const ErrorResponse& error) {

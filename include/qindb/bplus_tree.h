@@ -1,26 +1,27 @@
-#ifndef QINDB_BPLUS_TREE_H
+#ifndef QINDB_BPLUS_TREE_H  // 防止重复包含该头文件
 #define QINDB_BPLUS_TREE_H
 
-#include "common.h"
-#include "page.h"
-#include "buffer_pool_manager.h"
-#include <QVector>
-#include <QPair>
-#include <functional>
+#include "common.h"        // 包含通用定义和类型
+#include "page.h"          // 包含页面相关的定义
+#include "buffer_pool_manager.h"  // 包含缓冲池管理器相关定义
+#include <QVector>         // Qt的动态数组容器
+#include <QPair>           // Qt的键值对容器
+#include <functional>      // 函数对象相关头文件
 
-namespace qindb {
+namespace qindb {          // 命名空间，避免命名冲突
 
 /**
- * @brief B+ 树节点类型
+ * @brief B+ 树节点类型枚举
+ * 定义了B+树中可能出现的节点类型
  */
 enum class BPlusTreeNodeType : uint8_t {
-    INVALID = 0,
+    INVALID = 0,      // 无效节点类型
     INTERNAL_NODE,  // 内部节点（索引节点）
     LEAF_NODE       // 叶子节点（数据节点）
 };
 
 /**
- * @brief B+ 树页头部
+ * @brief B+ 树页头部结构体
  *
  * B+ 树页布局:
  * +-------------------+
@@ -30,7 +31,7 @@ enum class BPlusTreeNodeType : uint8_t {
  * +-------------------+
  * Total: 8192 字节
  */
-#pragma pack(push, 1)
+#pragma pack(push, 1)  // 设置1字节对齐，确保结构体紧凑排列
 struct BPlusTreePageHeader {
     BPlusTreeNodeType nodeType;    // 节点类型 (1 字节)
     uint8_t reserved1;              // 保留 (1 字节)
@@ -60,9 +61,9 @@ struct BPlusTreePageHeader {
         , reserved5(0)
     {}
 };
-#pragma pack(pop)
+#pragma pack(pop)  // 恢复默认对齐方式
 
-static_assert(sizeof(BPlusTreePageHeader) == 48, "BPlusTreePageHeader must be 48 bytes");
+static_assert(sizeof(BPlusTreePageHeader) == 48, "BPlusTreePageHeader must be 48 bytes");  // 编译时断言，确保结构体大小正确
 
 /**
  * @brief B+ 树键值对（用于整数键）

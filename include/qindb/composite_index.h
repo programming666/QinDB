@@ -1,15 +1,15 @@
-#ifndef QINDB_COMPOSITE_INDEX_H
+#ifndef QINDB_COMPOSITE_INDEX_H  // 防止重复包含的头文件保护宏
 #define QINDB_COMPOSITE_INDEX_H
 
-#include "common.h"
-#include "composite_key.h"
-#include "generic_bplustree.h"
-#include "buffer_pool_manager.h"
-#include <QVector>
+#include "common.h"          // 包含公共定义和类型
+#include "composite_key.h"   // 包含复合键相关定义
+#include "generic_bplustree.h" // 包含通用B+树实现
+#include "buffer_pool_manager.h" // 包含缓冲池管理器
+#include <QVector>           // Qt动态数组容器
 #include <QPair>
-#include <memory>
+#include <memory>           // 智能指针相关头文件
 
-namespace qindb {
+namespace qindb {           // 定义qindb命名空间
 
 /**
  * @brief 复合索引 - 支持多列索引的B+树
@@ -23,19 +23,19 @@ namespace qindb {
  * 使用示例：
  * CREATE INDEX idx_name_age ON users(name, age);
  */
-class CompositeIndex {
+class CompositeIndex {      // 复合索引类定义
 public:
     /**
      * @brief 构造函数
-     * @param bufferPoolManager 缓冲池管理器
-     * @param columnTypes 复合键各列的数据类型
+     * @param bufferPoolManager 缓冲池管理器指针
+     * @param columnTypes 复合键各列的数据类型数组
      * @param rootPageId 根节点页ID（如果是新索引则为 INVALID_PAGE_ID）
      */
     CompositeIndex(BufferPoolManager* bufferPoolManager,
                   const QVector<DataType>& columnTypes,
                   PageId rootPageId = INVALID_PAGE_ID);
 
-    ~CompositeIndex();
+    ~CompositeIndex();      // 析构函数
 
     /**
      * @brief 插入复合键

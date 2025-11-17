@@ -1,9 +1,9 @@
-#ifndef QINDB_SYSTEM_TABLES_H
+#ifndef QINDB_SYSTEM_TABLES_H  // 防止头文件重复包含的宏定义
 #define QINDB_SYSTEM_TABLES_H
 
-#include <QString>
+#include <QString>  // 包含Qt的字符串类
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 /**
  * @brief 系统表定义
@@ -13,12 +13,12 @@ namespace qindb {
  */
 
 // 系统表名称常量
-namespace SystemTables {
-    const QString SYS_TABLES = "sys_tables";
+namespace SystemTables {  // 定义系统表名称的命名空间
+    const QString SYS_TABLES = "sys_tables";      // 系统表，存储表的基本信息
     const QString SYS_COLUMNS = "sys_columns";
-    const QString SYS_INDEXES = "sys_indexes";
-    const QString SYS_WAL_LOGS = "sys_wal_logs";
-    const QString SYS_WAL_META = "sys_wal_meta";
+    const QString SYS_INDEXES = "sys_indexes";    // 系统表，存储索引相关信息
+    const QString SYS_WAL_LOGS = "sys_wal_logs";  // 系统表，存储WAL日志记录
+    const QString SYS_WAL_META = "sys_wal_meta";  // 系统表，存储WAL元数据
     const QString SYS_PERMISSIONS = "sys_permissions";  // 权限表
 }
 

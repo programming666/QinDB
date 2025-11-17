@@ -1,13 +1,13 @@
-#include "qindb/database_manager.h"
-#include "qindb/logger.h"
-#include "qindb/config.h"
-#include "qindb/permission_manager.h"
-#include <QFile>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonArray>
+#include "qindb/database_manager.h"  // 引入数据库管理器头文件
+#include "qindb/logger.h"           // 引入日志系统头文件
+#include "qindb/config.h"           // 引入配置系统头文件
+#include "qindb/permission_manager.h" // 引入权限管理器头文件
+#include <QFile>                    // 引入Qt文件操作类
+#include <QJsonDocument>           // 引入Qt JSON文档处理类
+#include <QJsonObject>             // 引入Qt JSON对象类
+#include <QJsonArray>              // 引入Qt JSON数组类
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 DatabaseManager::DatabaseManager(const QString& dataDir)
     : m_dataDir(dataDir)

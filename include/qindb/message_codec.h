@@ -1,15 +1,15 @@
-#ifndef QINDB_MESSAGE_CODEC_H
+#ifndef QINDB_MESSAGE_CODEC_H  // 防止头文件被重复包含
 #define QINDB_MESSAGE_CODEC_H
 
-#include "qindb/protocol.h"
-#include <QtCore/QByteArray>
-#include <QtCore/QDataStream>
-#include <optional>
+#include "qindb/protocol.h"  // 引入协议定义头文件
+#include <QtCore/QByteArray>  // 引入Qt字节数组类
+#include <QtCore/QDataStream> // 引入Qt数据流类
+#include <optional>          // 引入可选值类型
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 /**
- * @brief 消息编解码器
+ * @brief 消息编解码器类
  *
  * 负责将协议消息序列化为字节流，以及从字节流反序列化为消息对象。
  * 所有多字节整数使用网络字节序（Big-Endian）。
@@ -92,6 +92,18 @@ public:
      * @brief 解码 ERROR_RESPONSE 消息
      */
     static std::optional<ErrorResponse> decodeErrorResponse(const QByteArray& payload);
+
+    // ========== DATABASE_SWITCH 编解码 ==========
+
+    /**
+     * @brief 编码 DATABASE_SWITCH 消息
+     */
+    static QByteArray encodeDatabaseSwitch(const DatabaseSwitchMessage& message);
+
+    /**
+     * @brief 解码 DATABASE_SWITCH 消息
+     */
+    static std::optional<DatabaseSwitchMessage> decodeDatabaseSwitch(const QByteArray& payload);
 
     // ========== 辅助方法 ==========
 

@@ -1,12 +1,12 @@
-#ifndef QINDB_ROW_ID_INDEX_H
+#ifndef QINDB_ROW_ID_INDEX_H  // 防止头文件重复包含的宏定义
 #define QINDB_ROW_ID_INDEX_H
 
-#include "common.h"
-#include <QHash>
-#include <QMutex>
-#include <QVector>
+#include "common.h"          // 包含公共定义和类型
+#include <QHash>            // Qt的哈希表容器
+#include <QMutex>           // Qt的互斥锁，用于线程同步
+#include <QVector>          // Qt的动态数组容器
 
-namespace qindb {
+namespace qindb {          // 定义命名空间 qindb
 
 /**
  * @brief 行位置信息

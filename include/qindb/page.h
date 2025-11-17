@@ -1,19 +1,20 @@
-#ifndef QINDB_PAGE_H
+#ifndef QINDB_PAGE_H  // 防止头文件重复包含
 #define QINDB_PAGE_H
 
-#include "common.h"
-#include <QMutex>
-#include <cstring>
-#include <atomic>
+#include "common.h"  // 引入公共定义
+#include <QMutex>    // Qt互斥锁，用于线程同步
+#include <cstring>   // C字符串操作
+#include <atomic>    // 原子操作，用于线程安全的计数器
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 /**
- * @brief 页类型
+ * @brief 页类型枚举
+ * 定义了数据库中所有可能的页面类型
  */
 enum class PageType : uint8_t {
-    INVALID = 0,          // 无效页
-    HEADER_PAGE = 1,      // 数据库头部页（固定为页面0）
+    INVALID = 0,          // 无效页，用于初始化或错误情况
+    HEADER_PAGE = 1,      // 数据库头部页（固定为页面0），存储数据库全局信息
     METADATA_PAGE = 2,    // 元数据页（存储表定义、索引定义）
     TABLE_PAGE = 3,       // 表数据页
     INDEX_LEAF_PAGE = 4,  // B+树叶子页

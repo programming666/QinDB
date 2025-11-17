@@ -1,9 +1,9 @@
-#include "qindb/query_cache.h"
-#include "qindb/logger.h"
-#include <QMutexLocker>
-#include <algorithm>
+#include "qindb/query_cache.h"  // 引入查询缓存头文件
+#include "qindb/logger.h"      // 引入日志记录头文件
+#include <QMutexLocker>        // 引入互斥锁保护头文件
+#include <algorithm>           // 引入算法头文件
 
-namespace qindb {
+namespace qindb {  // 定义 qindb 命名空间
 
 QueryCache::QueryCache(uint64_t maxEntries, uint64_t maxMemoryMB, uint64_t ttlSeconds)
     : maxEntries_(maxEntries)

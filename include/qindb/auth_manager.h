@@ -1,39 +1,43 @@
-#ifndef QINDB_AUTH_MANAGER_H
+#ifndef QINDB_AUTH_MANAGER_H  // 防止重复包含该头文件
 #define QINDB_AUTH_MANAGER_H
 
-#include <QString>
-#include <QVector>
-#include <QDateTime>
-#include <optional>
-#include <memory>
+#include <QString>      // Qt字符串类
+#include <QVector>      // Qt动态数组类
+#include <QDateTime>    // Qt日期时间类
+#include <optional>     // C++17可选值类型
+#include <memory>       // 智能指针
 #include "common.h"  // 包含PermissionType定义
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
-class Catalog;
-class BufferPoolManager;
-class DiskManager;
+class Catalog;           // 目录类的前向声明
+class BufferPoolManager; // 缓冲池管理器类的前向声明
+class DiskManager;       // 磁盘管理器类的前向声明
 
 /**
  * @brief 用户记录结构
+ * 
+ * 存储用户的基本信息，包括ID、用户名、密码哈希、
+ * 创建时间、更新时间、激活状态和管理员权限。
  */
 struct UserRecord {
-    uint64_t id;
-    QString username;
+    uint64_t id;              // 用户唯一标识符
+    QString username;         // 用户名
     QString passwordHash;  // Base64编码的密码哈希
-    QDateTime createdAt;
-    QDateTime updatedAt;
-    bool isActive;
-    bool isAdmin;
+    QDateTime createdAt;      // 用户创建时间
+    QDateTime updatedAt;      // 用户信息最后更新时间
+    bool isActive;           // 用户是否激活
+    bool isAdmin;            // 用户是否为管理员
 
+    // 默认构造函数
     UserRecord()
-        : id(0)
-        , isActive(true)
-        , isAdmin(false) {}
+        : id(0)              // ID初始化为0
+        , isActive(true)     // 默认激活状态
+        , isAdmin(false) {}  // 默认非管理员
 };
 
 /**
- * @brief 认证管理器
+ * @brief 认证管理器类
  *
  * 负责用户管理、认证验证、权限检查等功能。
  * 用户数据存储在系统数据库 qindb.users 表中。
@@ -42,15 +46,15 @@ class AuthManager {
 public:
     /**
      * @brief 构造函数
-     * @param catalog 元数据管理器
-     * @param bufferPool 缓冲池管理器
-     * @param diskManager 磁盘管理器
+     * @param catalog 元数据管理器指针
+     * @param bufferPool 缓冲池管理器指针
+     * @param diskManager 磁盘管理器指针
      */
     AuthManager(Catalog* catalog,
                 BufferPoolManager* bufferPool,
                 DiskManager* diskManager);
 
-    ~AuthManager();
+    ~AuthManager();  // 析构函数
 
     // ========== 系统初始化 ==========
 

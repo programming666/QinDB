@@ -1,19 +1,21 @@
-#ifndef QINDB_UNDO_LOG_H
+#ifndef QINDB_UNDO_LOG_H  // 防止头文件重复包含
 #define QINDB_UNDO_LOG_H
 
-#include "common.h"
-#include <QString>
-#include <QByteArray>
-#include <QVariant>
-#include <QVector>
+#include "common.h"  // 包含公共定义
+#include <QString>   // Qt字符串类
+#include <QByteArray> // Qt字节数组类
+#include <QVariant>  // Qt变量类型类
+#include <QVector>   // Qt动态数组类
 
-namespace qindb {
+namespace qindb {  // 定义 qindb 命名空间
 
 /**
- * @brief Undo 日志操作类型
+ * @brief Undo 日志操作类型枚举
+ * 
+ * 定义了三种基本的数据库操作类型，用于事务回滚时确定恢复策略
  */
 enum class UndoOperationType : uint8_t {
-    INVALID = 0,
+    INVALID = 0,  // 无效操作类型
     INSERT,     // 插入操作 - 需要删除记录
     UPDATE,     // 更新操作 - 需要恢复旧值
     DELETE      // 删除操作 - 需要恢复记录

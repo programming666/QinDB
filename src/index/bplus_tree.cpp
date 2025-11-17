@@ -1,9 +1,9 @@
-#include "qindb/bplus_tree.h"
-#include "qindb/logger.h"
-#include <algorithm>
-#include <cstring>
+#include "qindb/bplus_tree.h"  // 包含B+树头文件
+#include "qindb/logger.h"      // 包含日志记录头文件
+#include <algorithm>          // 包含STL算法库
+#include <cstring>            // 包含字符串操作库
 
-namespace qindb {
+namespace qindb {  // 定义命名空间qindb
 
 BPlusTree::BPlusTree(BufferPoolManager* bufferPoolManager, PageId rootPageId, int order)
     : bufferPoolManager_(bufferPoolManager)

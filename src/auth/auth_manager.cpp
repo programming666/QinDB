@@ -1,13 +1,13 @@
-#include "qindb/auth_manager.h"
-#include "qindb/password_hasher.h"
-#include "qindb/catalog.h"
+#include "qindb/auth_manager.h"  // 包含认证管理器头文件
+#include "qindb/password_hasher.h"  // 包含密码哈希器头文件
+#include "qindb/catalog.h"  // 包含目录管理器头文件
 #include "qindb/buffer_pool_manager.h"
-#include "qindb/disk_manager.h"
-#include "qindb/table_page.h"
-#include "qindb/logger.h"
-#include <QDateTime>
+#include "qindb/disk_manager.h"  // 包含磁盘管理器头文件
+#include "qindb/table_page.h"  // 包含表页管理头文件
+#include "qindb/logger.h"  // 包含日志记录头文件
+#include <QDateTime>  // 包含日期时间处理头文件
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 AuthManager::AuthManager(Catalog* catalog,
                         BufferPoolManager* bufferPool,
@@ -21,6 +21,11 @@ AuthManager::~AuthManager() = default;
 
 // ========== 系统初始化 ==========
 
+/**
+ * 初始化用户认证系统
+ * 该方法负责创建用户表结构、检查管理员用户，并创建默认管理员用户（如果不存在）
+ * @return 初始化成功返回true，失败返回false
+ */
 bool AuthManager::initializeUserSystem() {
     LOG_INFO("Initializing user authentication system...");
 
@@ -247,6 +252,20 @@ bool AuthManager::setUserActive(const QString& username, bool active) {
 // ========== 认证验证 ==========
 
 bool AuthManager::authenticate(const QString& username, const QString& password) {
+    LOG_INFO(QString("Authentication attempt for user: '%1'").arg(username));
+    
+    // 首先检查用户名是否为空
+    if (username.isEmpty()) {
+        LOG_ERROR("Authentication failed: username is empty");
+        return false;
+    }
+    
+    // 检查密码是否为空
+    if (password.isEmpty()) {
+        LOG_ERROR(QString("Authentication failed: password is empty for user '%1'").arg(username));
+        return false;
+    }
+    
     auto userOpt = getUserFromDatabase(username);
     if (!userOpt) {
         LOG_WARN(QString("Authentication failed: user '%1' not found").arg(username));
@@ -254,6 +273,8 @@ bool AuthManager::authenticate(const QString& username, const QString& password)
     }
 
     const UserRecord& user = *userOpt;
+    LOG_DEBUG(QString("Found user '%1' (id: %2, active: %3, admin: %4)")
+                 .arg(user.username).arg(user.id).arg(user.isActive).arg(user.isAdmin));
 
     // 检查用户是否激活
     if (!user.isActive) {
@@ -262,7 +283,8 @@ bool AuthManager::authenticate(const QString& username, const QString& password)
     }
 
     // 验证密码
-    if (!PasswordHasher::verifyPassword(password, user.passwordHash)) {
+    bool passwordValid = PasswordHasher::verifyPassword(password, user.passwordHash);
+    if (!passwordValid) {
         LOG_WARN(QString("Authentication failed: invalid password for user '%1'").arg(username));
         return false;
     }
@@ -513,8 +535,62 @@ bool AuthManager::updateUser(const UserRecord& user) {
                 newRecord[5] = user.isActive ? 1 : 0;  // BOOL -> INT
                 newRecord[6] = user.isAdmin ? 1 : 0;   // BOOL -> INT
 
-                TablePage::updateRecord(page, tableDef, slotIndex, newRecord, INVALID_TXN_ID);
+                // 尝试原地更新记录
+                if (TablePage::updateRecord(page, tableDef, slotIndex, newRecord, INVALID_TXN_ID)) {
+                    bufferPool_->unpinPage(pageId, true);
+                    return true;
+                }
+
+                // 原地更新失败（可能是因为新记录太大），尝试删除后重新插入
+                LOG_INFO(QString("In-place update failed for user '%1', trying delete and re-insert").arg(user.username));
+                
+                // 删除原记录
+                TablePage::deleteRecord(page, slotIndex, INVALID_TXN_ID);
+                
+                // 准备插入新记录
+                QVector<QVariant> insertRecord;
+                insertRecord.append(QVariant::fromValue(user.id));
+                insertRecord.append(user.username);
+                insertRecord.append(user.passwordHash);
+                insertRecord.append(QVariant::fromValue(user.createdAt.toSecsSinceEpoch()));
+                insertRecord.append(QVariant::fromValue(user.updatedAt.toSecsSinceEpoch()));
+                insertRecord.append(user.isActive ? 1 : 0);  // BOOL -> INT
+                insertRecord.append(user.isAdmin ? 1 : 0);   // BOOL -> INT
+                
+                // 尝试在同一页面插入新记录
+                if (TablePage::insertRecord(page, tableDef, user.id, insertRecord, INVALID_TXN_ID)) {
+                    bufferPool_->unpinPage(pageId, true);
+                    return true;
+                }
+                
+                // 页面没有空间，尝试分配新页面
+                LOG_INFO(QString("No space in page %1, allocating new page for user '%2'").arg(pageId).arg(user.username));
+                
+                PageId newPageId = diskManager_->allocatePage();
+                Page* newPage = bufferPool_->fetchPage(newPageId);
+                if (!newPage) {
+                    bufferPool_->unpinPage(pageId, false);
+                    LOG_ERROR("Failed to allocate new page for user update");
+                    return false;
+                }
+                
+                // 初始化新页面
+                TablePage::init(newPage, newPageId);
+                
+                if (!TablePage::insertRecord(newPage, tableDef, user.id, insertRecord, INVALID_TXN_ID)) {
+                    bufferPool_->unpinPage(newPageId, false);
+                    bufferPool_->unpinPage(pageId, false);
+                    LOG_ERROR("Failed to insert record into new page for user update");
+                    return false;
+                }
+                
+                // 链接新页面到页面链表
+                PageId nextPageId = page->getNextPageId();
+                page->setNextPageId(newPageId);
+                newPage->setNextPageId(nextPageId);
+                
                 bufferPool_->unpinPage(pageId, true);
+                bufferPool_->unpinPage(newPageId, true);
                 return true;
             }
         }

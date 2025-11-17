@@ -1,26 +1,30 @@
-#ifndef QINDB_TLS_SOCKET_FACTORY_H
+#ifndef QINDB_TLS_SOCKET_FACTORY_H  // 防止重复包含宏定义
 #define QINDB_TLS_SOCKET_FACTORY_H
 
-#include "qindb/tls_config.h"
-#include "qindb/tls_handshake_manager.h"
-#include "qindb/fingerprint_manager.h"
-#include "qindb/ssLError_handler.h"
-#include <QTcpSocket>
-#include <QSslSocket>
-#include <memory>
+#include "qindb/tls_config.h"        // 包含TLS配置相关头文件
+#include "qindb/tls_handshake_manager.h"  // 包含TLS握手管理器相关头文件
+#include "qindb/fingerprint_manager.h"    // 包含指纹管理器相关头文件
+#include "qindb/ssLError_handler.h"       // 包含SSL错误处理相关头文件
+#include <QTcpSocket>                    // Qt TCP套接字类
+#include <QSslSocket>                    // Qt SSL套接字类
+#include <memory>                        // 智能指针相关头文件
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 /**
  * @brief TLS Socket工厂 - 简化TLS socket的创建和配置
+ * 
+ * 这个类负责创建和配置SSL/TLS socket，支持服务器端和客户端模式。
+ * 它封装了SSL socket的创建、配置和错误处理等复杂操作。
  */
 class TLSSocketFactory {
 public:
-    explicit TLSSocketFactory(const TLSConfig& config);
-    ~TLSSocketFactory();
+    explicit TLSSocketFactory(const TLSConfig& config);  // 构造函数，接收TLS配置参数
+    ~TLSSocketFactory();  // 析构函数
 
     /**
      * @brief 创建服务器端SSL socket
+     *
      * @param rawSocket 原始TCP socket(已连接)
      * @return SSL socket,如果失败返回nullptr
      */

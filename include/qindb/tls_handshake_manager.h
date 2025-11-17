@@ -1,38 +1,42 @@
-#ifndef QINDB_TLS_HANDSHAKE_MANAGER_H
+#ifndef QINDB_TLS_HANDSHAKE_MANAGER_H  // 防止头文件重复包含
 #define QINDB_TLS_HANDSHAKE_MANAGER_H
 
-#include "qindb/tls_config.h"
-#include "qindb/logger.h"
-#include <QObject>
-#include <QSslSocket>
-#include <QTimer>
-#include <memory>
+#include "qindb/tls_config.h"    // 引入TLS配置头文件
+#include "qindb/logger.h"        // 引入日志功能头文件
+#include <QObject>               // Qt对象基类
+#include <QSslSocket>            // Qt SSL套接字类
+#include <QTimer>                // Qt定时器类
+#include <memory>                // 智能指针相关头文件
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 /**
- * @brief TLS握手状态
+ * @brief TLS握手状态枚举
+ * 定义了TLS握手过程中可能的各种状态
  */
 enum class TLSHandshakeState {
-    IDLE,                    // 初始状态
-    HANDSHAKE_STARTED,      // 握手开始
-    CERTIFICATE_RECEIVED,   // 证书接收完成
-    HANDSHAKE_COMPLETED,    // 握手成功完成
-    HANDSHAKE_FAILED,       // 握手失败
-    HANDSHAKE_TIMEOUT       // 握手超时
+    IDLE,                    // 初始状态 - 握手尚未开始
+    HANDSHAKE_STARTED,      // 握手开始 - SSL握手过程已启动
+    CERTIFICATE_RECEIVED,   // 证书接收完成 - 已收到对端证书
+    HANDSHAKE_COMPLETED,    // 握手成功完成 - TLS握手成功完成
+    HANDSHAKE_FAILED,       // 握手失败 - 握手过程中出现错误
+    HANDSHAKE_TIMEOUT       // 握手超时 - 握手过程超过设定时间
 };
 
 /**
- * @brief TLS握手结果
+ * @brief TLS握手结果结构体
+ * 用于存储握手操作的结果信息
  */
 struct TLSHandshakeResult {
-    bool success;
-    QString errorMessage;
-    QList<QSslError> errors;
-    QSslCertificate peerCertificate;
+    bool success;                    // 握手是否成功
+    QString errorMessage;            // 错误信息描述
+    QList<QSslError> errors;        // SSL错误列表
+    QSslCertificate peerCertificate; // 对端证书
     
+    // 默认构造函数
     TLSHandshakeResult() : success(false) {}
     
+    // 带参数的构造函数
     TLSHandshakeResult(bool succ, const QString& error = "") 
         : success(succ), errorMessage(error) {}
 };

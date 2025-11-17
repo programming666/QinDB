@@ -1,19 +1,19 @@
-#ifndef QINDB_DISK_MANAGER_H
+#ifndef QINDB_DISK_MANAGER_H  // 防止重复包含的头文件保护宏
 #define QINDB_DISK_MANAGER_H
 
-#include "common.h"
-#include "page.h"
-#include <QFile>
-#include <QMutex>
-#include <memory>
+#include "common.h"     // 包含公共定义和类型
+#include "page.h"       // 包含页相关的定义
+#include <QFile>        // Qt文件操作类
+#include <QMutex>       // Qt互斥锁类
+#include <memory>       // 智能指针相关头文件
 
-namespace qindb {
+namespace qindb {      // 定义qindb命名空间
 
 /**
- * @brief 磁盘管理器
+ * @brief 磁盘管理器类
  *
  * 职责：
- * 1. 管理数据库文件的读写
+ * 1. 管理数据库文件的读写操作
  * 2. 分配和回收页
  * 3. 维护空闲页列表
  * 4. 确保数据持久化

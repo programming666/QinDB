@@ -66,42 +66,60 @@ signals:
 private slots:
     /**
      * @brief 读取数据槽函数
+     *        当有新数据到达时触发，用于处理接收到的数据
      */
     void onReadyRead();
 
     /**
      * @brief 断开连接槽函数
+     *        当客户端断开连接时触发，进行清理工作
      */
     void onDisconnected();
 
     /**
      * @brief 错误槽函数
+     *        当发生网络错误时触发，处理错误情况
      */
     void onError(QAbstractSocket::SocketError socketError);
 
     /**
      * @brief SSL错误槽函数
+     *        当发生SSL相关错误时触发，处理SSL错误
      */
     void onSslErrors(const QList<QSslError>& errors);
 
 private:
     /**
      * @brief 处理接收到的消息
+     *        解析并处理客户端发送的各种类型消息
+     * @param data 接收到的原始数据
      */
     void handleMessage(const QByteArray& data);
 
     /**
      * @brief 处理认证请求
+     *        验证用户身份信息，建立安全连接
+     * @param payload 认证请求的负载数据
      */
     void handleAuthRequest(const QByteArray& payload);
 
     /**
      * @brief 处理查询请求
+     *        执行客户端发送的数据库查询请求
+     * @param payload 查询请求的负载数据
      */
     void handleQueryRequest(const QByteArray& payload);
 
     /**
+     * @brief 处理数据库切换请求
+     *        处理客户端的数据库切换请求
+     * @param payload 数据库切换请求的负载数据
+     */
+    void handleDatabaseSwitch(const QByteArray& payload);
+
+    /**
      * @brief 处理 PING 请求
+     *        响应客户端的连接状态检查请求
      */
     void handlePing();
 

@@ -1,16 +1,16 @@
-#ifndef QINDB_VACUUM_H
+#ifndef QINDB_VACUUM_H  // 防止头文件重复包含
 #define QINDB_VACUUM_H
 
-#include "common.h"
-#include "transaction.h"
-#include "buffer_pool_manager.h"
-#include "catalog.h"
-#include "table_page.h"
-#include <QThread>
+#include "common.h"      // 包含公共定义和类型
+#include "transaction.h" // 包含事务相关定义
+#include "buffer_pool_manager.h" // 包含缓冲池管理器定义
+#include "catalog.h"     // 包含目录表相关定义
+#include "table_page.h"  // 包含表页相关定义
+#include <QThread>       // Qt线程支持
 #include <QMutex>
-#include <QWaitCondition>
+#include <QWaitCondition> // Qt等待条件支持
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 /**
  * @brief VACUUM 垃圾回收器
@@ -18,7 +18,7 @@ namespace qindb {
  * 负责清理被逻辑删除的记录（deleteTxnId != INVALID_TXN_ID 且已提交）
  * 支持手动触发和后台自动清理
  */
-class VacuumWorker : public QObject {
+class VacuumWorker : public QObject {  // 继承自QObject以支持Qt信号槽机制
 public:
     /**
      * @brief 构造函数
@@ -28,7 +28,7 @@ public:
     explicit VacuumWorker(TransactionManager* txnMgr,
                          BufferPoolManager* bufferPool);
 
-    ~VacuumWorker();
+    ~VacuumWorker();  // 析构函数
 
     /**
      * @brief 清理指定表的旧版本
@@ -51,7 +51,7 @@ public:
     /**
      * @brief 检查后台线程是否正在运行
      */
-    bool isRunning() const { return running_; }
+    bool isRunning() const { return running_; }  // 内联函数实现
 
 private:
     /**
@@ -71,17 +71,17 @@ private:
      */
     void backgroundWork();
 
-    TransactionManager* txnMgr_;
+    TransactionManager* txnMgr_;      // 事务管理器指针成员
     BufferPoolManager* bufferPool_;
 
-    // 后台线程控制
+    // 后台线程控制相关成员
     QThread* workerThread_;
     bool running_;
-    int intervalSeconds_;
-    QMutex mutex_;
-    QWaitCondition condition_;
+    int intervalSeconds_;      // 清理间隔时间（秒）
+    QMutex mutex_;            // 互斥锁，用于线程同步
+    QWaitCondition condition_; // 等待条件，用于线程间通信
 };
 
 } // namespace qindb
 
-#endif // QINDB_VACUUM_H
+#endif // QINDB_VACUUM_H  // 结束头文件包含保护

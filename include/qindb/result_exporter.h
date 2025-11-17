@@ -9,7 +9,8 @@
 namespace qindb {
 
 /**
- * @brief 导出格式
+ * @brief 导出格式枚举类
+ * 定义了支持的三种导出格式类型
  */
 enum class ExportFormat {
     JSON,       // JSON格式

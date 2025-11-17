@@ -1,3 +1,7 @@
+/**
+ * @file composite_key.h
+ * @brief 复合键类的实现，用于存储和比较多个键值对
+ */
 #include "qindb/composite_key.h"
 #include "qindb/key_comparator.h"
 #include "qindb/type_serializer.h"
@@ -6,13 +10,22 @@
 
 namespace qindb {
 
+/**
+ * @brief 默认构造函数，创建一个空的复合键
+ */
 CompositeKey::CompositeKey() {
 }
 
+/**
+ * @brief 使用给定的值和类型列表构造复合键
+ * @param values 键值列表
+ * @param types 键值对应的数据类型列表
+ */
 CompositeKey::CompositeKey(const QVector<QVariant>& values, const QVector<DataType>& types)
     : values_(values)
     , types_(types)
 {
+    // 检查值和类型的数量是否匹配，如果不匹配则清空
     if (values_.size() != types_.size()) {
         LOG_ERROR(QString("CompositeKey: values and types size mismatch (%1 vs %2)")
                      .arg(values_.size()).arg(types_.size()));
@@ -21,11 +34,20 @@ CompositeKey::CompositeKey(const QVector<QVariant>& values, const QVector<DataTy
     }
 }
 
+/**
+ * @brief 向复合键中添加一个键值对
+ * @param value 要添加的键值
+ * @param value的类型
+ */
 void CompositeKey::addValue(const QVariant& value, DataType type) {
     values_.append(value);
     types_.append(type);
 }
 
+/**
+ * @brief 序列化复合键为字节数组
+ * @return 序列化后的字节数组，如果序列化失败则返回空字节数组
+ */
 QByteArray CompositeKey::serialize() const {
     QByteArray result;
     QDataStream stream(&result, QIODevice::WriteOnly);
@@ -50,6 +72,11 @@ QByteArray CompositeKey::serialize() const {
     return result;
 }
 
+/**
+ * @brief 从字节数组反序列化复合键
+ * @param data 包含序列化数据的字节数组
+ * @return 反序列化成功返回true，否则返回false
+ */
 bool CompositeKey::deserialize(const QByteArray& data) {
     QDataStream stream(data);
 
@@ -57,6 +84,7 @@ bool CompositeKey::deserialize(const QByteArray& data) {
     qint32 count;
     stream >> count;
 
+    // 检查数量是否在合理范围内
     if (count < 0 || count > 100) {  // 合理性检查
         LOG_ERROR(QString("CompositeKey::deserialize: invalid count %1").arg(count));
         return false;

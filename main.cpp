@@ -412,6 +412,52 @@ void analyzeSql(const QString& sql, qindb::Executor* executor) {
 }
 
 /**
+ * @brief 检测SQL语句类型
+ * @param sql SQL语句
+ * @return 查询类型描述
+ */
+QString detectQueryType(const QString& sql) {
+    QString upperSql = sql.trimmed().toUpper();
+    
+    // DDL语句 (Data Definition Language)
+    if (upperSql.startsWith("CREATE ")) {
+        if (upperSql.contains("DATABASE")) return "DDL - CREATE DATABASE";
+        if (upperSql.contains("TABLE")) return "DDL - CREATE TABLE"; 
+        if (upperSql.contains("INDEX")) return "DDL - CREATE INDEX";
+        return "DDL - CREATE";
+    }
+    if (upperSql.startsWith("DROP ")) {
+        if (upperSql.contains("DATABASE")) return "DDL - DROP DATABASE";
+        if (upperSql.contains("TABLE")) return "DDL - DROP TABLE";
+        if (upperSql.contains("INDEX")) return "DDL - DROP INDEX";
+        return "DDL - DROP";
+    }
+    if (upperSql.startsWith("ALTER ")) {
+        return "DDL - ALTER";
+    }
+    if (upperSql.startsWith("USE ")) {
+        return "DDL - USE DATABASE";
+    }
+    
+    // DML语句 (Data Manipulation Language)
+    if (upperSql.startsWith("INSERT ")) return "DML - INSERT";
+    if (upperSql.startsWith("UPDATE ")) return "DML - UPDATE";
+    if (upperSql.startsWith("DELETE ")) return "DML - DELETE";
+    
+    // DQL语句 (Data Query Language)
+    if (upperSql.startsWith("SELECT ")) return "DQL - SELECT";
+    
+    // 权限管理
+    if (upperSql.startsWith("GRANT ")) return "DCL - GRANT";
+    if (upperSql.startsWith("REVOKE ")) return "DCL - REVOKE";
+    
+    // 其他语句
+    if (upperSql.startsWith("SHOW ")) return "DQL - SHOW";
+    
+    return "SQL语句";
+}
+
+/**
  * @brief 显示查询响应结果
  * @param response 查询响应
  */
@@ -427,12 +473,12 @@ void displayQueryResponse(const qindb::QueryResponse& response) {
     // 根据结果类型显示不同的输出
     switch (response.resultType) {
     case ResultType::EMPTY:
-        // DDL/DML 语句，显示影响的行数
-        std::wcout << L"✓ 查询执行成功";
+        // DDL/DML 语句，显示影响的行数和查询类型
         if (response.rowsAffected > 0) {
-            std::wcout << L" (" << response.rowsAffected << L" 行受影响)";
+            std::wcout << L"✓ DDL/DML 操作执行成功 (" << response.rowsAffected << L" 行受影响)\n\n";
+        } else {
+            std::wcout << L"✓ 查询执行成功\n\n";
         }
-        std::wcout << L"\n\n";
         break;
 
     case ResultType::TABLE_DATA:
@@ -607,11 +653,24 @@ int runClientMode(const QString& connectionString) {
 
     // 用于同步等待查询响应
     bool waitingForResponse = false;
-
-    // 更新查询响应处理，设置标志
+    
+    // 跟踪当前数据库名和最后执行的SQL
+    QString currentDatabase = "qindb"; // 默认数据库
+    QString lastExecutedQuery; // 最后执行的SQL语句
+    
+    // 更新查询响应处理，设置标志和数据库状态跟踪
     QObject::disconnect(&clientManager, &qindb::ClientManager::queryResponse, nullptr, nullptr);
-    QObject::connect(&clientManager, &qindb::ClientManager::queryResponse, [&waitingForResponse](const qindb::QueryResponse& response) {
+    QObject::connect(&clientManager, &qindb::ClientManager::queryResponse, [&waitingForResponse, &currentDatabase, &lastExecutedQuery](const qindb::QueryResponse& response) {
         displayQueryResponse(response);
+        
+        // 只有在响应中包含数据库切换信息时才更新本地状态
+        // 服务器会在DATABASE_SWITCH响应中包含currentDatabase字段
+        if (response.status == qindb::QueryStatus::SUCCESS && 
+            !response.currentDatabase.isEmpty()) {
+            currentDatabase = response.currentDatabase;
+            LOG_INFO(QString("Client: Database switched to '%1'").arg(currentDatabase));
+        }
+        
         waitingForResponse = false;
     });
 
@@ -622,7 +681,11 @@ int runClientMode(const QString& connectionString) {
     while (true) {
         // 显示提示符
         if (sqlBuffer.empty()) {
-            std::wcout << L"qindb> " << std::flush;
+            if (currentDatabase.isEmpty()) {
+                std::wcout << L"qindb> " << std::flush;
+            } else {
+                std::wcout << currentDatabase.toStdWString() << L"> " << std::flush;
+            }
         } else {
             std::wcout << L"    -> " << std::flush;
         }
@@ -692,9 +755,39 @@ int runClientMode(const QString& connectionString) {
             continue;
         }
 
-        // 发送查询到服务器
+        // 检查是否是USE DATABASE命令，如果是，只发送数据库切换消息，不发送SQL查询
+        QString lowerSql = sql.trimmed().toLower();
+        if (lowerSql.startsWith("use database") || lowerSql.startsWith("use")) {
+            // 尝试从SQL语句中提取数据库名
+            QStringList parts = lowerSql.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+            if (parts.size() >= 2) {
+                QString dbName = parts[1];
+                if (dbName == "database" && parts.size() >= 3) {
+                    dbName = parts[2];
+                }
+                if (!dbName.isEmpty()) {
+                    // 发送数据库切换消息到服务器
+                    if (clientManager.sendDatabaseSwitch(dbName)) {
+                        LOG_INFO(QString("Sent database switch message to server: %1").arg(dbName));
+                        // 更新本地状态，不发送SQL查询，避免重复处理
+                        currentDatabase = dbName;
+                        std::wcout << L"✓ 数据库切换成功: " << dbName.toStdWString() << L"\n" << std::endl;
+                        continue;  // 跳过SQL查询发送，避免重复处理
+                    } else {
+                        LOG_ERROR("Failed to send database switch message to server");
+                        std::wcout << L"✗ 发送数据库切换消息失败\n" << std::endl;
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // 对于非USE DATABASE命令，正常发送查询到服务器
         if (clientManager.sendQuery(sql)) {
             waitingForResponse = true;
+
+            // 保存最后执行的SQL语句，用于检测USE DATABASE命令
+            lastExecutedQuery = sql;
 
             // 等待响应（最多5秒）
             int waitCount = 0;

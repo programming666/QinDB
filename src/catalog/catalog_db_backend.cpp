@@ -1,12 +1,12 @@
-#include "qindb/catalog_db_backend.h"
-#include "qindb/system_tables.h"
-#include "qindb/buffer_pool_manager.h"
-#include "qindb/disk_manager.h"
-#include "qindb/table_page.h"
-#include "qindb/logger.h"
-#include <QDataStream>
+#include "qindb/catalog_db_backend.h"  // 包含目录数据库后端的头文件
+#include "qindb/system_tables.h"      // 包含系统表定义的头文件
+#include "qindb/buffer_pool_manager.h" // 包含缓冲池管理器的头文件
+#include "qindb/disk_manager.h"       // 包含磁盘管理器的头文件
+#include "qindb/table_page.h"        // 包含表页面的头文件
+#include "qindb/logger.h"            // 包含日志记录的头文件
+#include <QDataStream>               // 包含Qt数据流操作的头文件
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 CatalogDbBackend::CatalogDbBackend(BufferPoolManager* bufferPool, DiskManager* diskManager)
     : bufferPool_(bufferPool)

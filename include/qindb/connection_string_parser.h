@@ -1,14 +1,16 @@
-#ifndef QINDB_CONNECTION_STRING_PARSER_H
-#define QINDB_CONNECTION_STRING_PARSER_H
+#ifndef QINDB_CONNECTION_STRING_PARSER_H  // 防止头文件重复包含
+#define QINDB_CONNECTION_STRING_PARSER_H  // 定义头文件保护宏
 
-#include <QString>
+#include <QString>        // 包含Qt字符串类
 #include <QRegularExpression>
-#include <optional>
+#include <optional>       // 包含可选值类型
 
-namespace qindb {
+namespace qindb {  // 定义qindb命名空间
 
 /**
  * @brief 连接字符串解析结果
+ * 
+ * 该结构体存储解析连接字符串后得到的各项参数
  */
 struct ConnectionParams {
     QString host;           // 主机地址

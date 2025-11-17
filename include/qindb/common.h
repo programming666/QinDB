@@ -1,19 +1,31 @@
 #ifndef QINDB_COMMON_H
 #define QINDB_COMMON_H
 
-#include <QString>
+
+
+/**
+ * @file QINDB_COMMON_H
+ * @brief QinDB数据库通用头文件，包含数据库的基本定义和常量
+ */
+#include <QString>        // Qt字符串类
 #include <QByteArray>
-#include <QVector>
-#include <QHash>
-#include <QVariant>
+#include <QVector>        // Qt动态数组类
+#include <QHash>          // Qt哈希表类
+#include <QVariant>       // Qt变体数据类型类
 #include <memory>
-#include <optional>
-#include <variant>
-#include <cstdint>
+#include <optional>       // C++可选值类型
+#include <variant>        // C++变体类型
+#include <cstdint>        // 固定宽度整数类型
 
 namespace qindb {
 
-// 数据库版本
+
+
+/**
+ * @namespace qindb
+ * @brief QinDB数据库的命名空间，包含所有数据库相关的定义和实现
+ */
+// 数据库版本定义
 constexpr int QINDB_VERSION_MAJOR = 1;
 constexpr int QINDB_VERSION_MINOR = 3;
 constexpr int QINDB_VERSION_PATCH = 0;

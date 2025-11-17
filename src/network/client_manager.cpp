@@ -3,6 +3,7 @@
 #include "qindb/logger.h"
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QSslSocket>
+#include <QtNetwork/QSslConfiguration>
 #include <QtCore/QTimer>
 #include <QtCore/QDateTime>
 
@@ -16,12 +17,16 @@ ClientManager::ClientManager(QObject* parent)
     , heartbeatTimer_(nullptr)
     , heartbeatInterval_(30000)  // 30秒心跳间隔
     , lastActivityTime_(0)
+    , maxRetries_(3)  // 最大重试3次
+    , currentRetryCount_(0)
+    , retryTimer_(nullptr)
     , fingerprintManager_(std::make_unique<FingerprintManager>()) {
 }
 
 ClientManager::~ClientManager() {
     disconnectFromServer();
     delete heartbeatTimer_;
+    delete retryTimer_;
 }
 
 bool ClientManager::connectToServer(const ConnectionParams& params) {
@@ -37,10 +42,15 @@ bool ClientManager::connectToServer(const ConnectionParams& params) {
         LOG_INFO("Creating SSL socket for secure connection");
         QSslSocket* sslSocket = new QSslSocket(this);
 
-        // Configure SSL socket
+        // Configure SSL socket with more robust settings
         sslSocket->setPeerVerifyMode(QSslSocket::VerifyNone);  // We use fingerprint verification instead
         sslSocket->setProtocol(QSsl::TlsV1_2OrLater);
-
+        
+        // 使用默认SSL配置但允许更灵活的握手
+        QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
+        sslConfig.setProtocol(QSsl::TlsV1_2OrLater);
+        sslSocket->setSslConfiguration(sslConfig);
+        
         // Connect SSL-specific signals
         connect(sslSocket, &QSslSocket::encrypted, this, &ClientManager::onEncrypted);
         connect(sslSocket, &QSslSocket::sslErrors, this, &ClientManager::onSslErrors);
@@ -71,24 +81,47 @@ bool ClientManager::connectToServer(const ConnectionParams& params) {
         socket_->connectToHost(params.host, params.port);
     }
 
-    // 等待连接建立（5秒超时）
-    if (!socket_->waitForConnected(5000)) {
+    // 等待连接建立（增加到30秒超时）
+    if (!socket_->waitForConnected(30000)) {
         QString errorMsg = socket_->errorString();
         updateConnectionStatus(QString("连接失败: %1").arg(errorMsg));
-        emit error(errorMsg);
-        return false;
-    }
-
-    // 如果是SSL连接，等待加密建立（额外5秒）
-    if (params.sslEnabled) {
-        QSslSocket* sslSocket = qobject_cast<QSslSocket*>(socket_);
-        if (!sslSocket->waitForEncrypted(5000)) {
-            QString errorMsg = QString("TLS握手失败: %1").arg(sslSocket->errorString());
-            updateConnectionStatus(errorMsg);
-            emit sslError(errorMsg);
+        
+        // 尝试重连
+        if (currentRetryCount_ < maxRetries_) {
+            currentRetryCount_++;
+            updateConnectionStatus(QString("连接失败，正在重试 (%1/%2): %3")
+                                 .arg(currentRetryCount_).arg(maxRetries_).arg(errorMsg));
+            attemptReconnection();
+            return false;  // 返回false但不发送error信号，因为正在重试
+        } else {
+            emit error(errorMsg);
             return false;
         }
     }
+
+    // 如果是SSL连接，等待加密建立（增加到60秒超时）
+    if (params.sslEnabled) {
+        QSslSocket* sslSocket = qobject_cast<QSslSocket*>(socket_);
+        if (!sslSocket->waitForEncrypted(60000)) {  // 增加到60秒
+            QString errorMsg = QString("TLS握手失败: %1").arg(sslSocket->errorString());
+            updateConnectionStatus(errorMsg);
+            
+            // TLS握手失败也尝试重连
+            if (currentRetryCount_ < maxRetries_) {
+                currentRetryCount_++;
+                updateConnectionStatus(QString("TLS握手失败，正在重试 (%1/%2): %3")
+                                     .arg(currentRetryCount_).arg(maxRetries_).arg(errorMsg));
+                attemptReconnection();
+                return false;
+            } else {
+                emit sslError(errorMsg);
+                return false;
+            }
+        }
+    }
+
+    // 连接成功，重置重试计数器
+    resetRetryCounter();
 
     // 初始化心跳定时器
     if (!heartbeatTimer_) {
@@ -112,6 +145,10 @@ void ClientManager::disconnectFromServer() {
 
     if (heartbeatTimer_) {
         heartbeatTimer_->stop();
+    }
+
+    if (retryTimer_) {
+        retryTimer_->stop();
     }
 
     isAuthenticated_ = false;
@@ -153,6 +190,32 @@ bool ClientManager::sendQuery(const QString& sql) {
     socket_->flush();
     lastActivityTime_ = QDateTime::currentMSecsSinceEpoch();
 
+    return true;
+}
+
+bool ClientManager::sendDatabaseSwitch(const QString& databaseName) {
+    if (!isConnected() || !isAuthenticated_) {
+        emit error("未连接或未认证，无法发送数据库切换消息");
+        return false;
+    }
+
+    // 创建数据库切换消息
+    DatabaseSwitchMessage message;
+    message.databaseName = databaseName;
+
+    // 编码并发送
+    QByteArray data = MessageCodec::encodeDatabaseSwitch(message);
+    qint64 written = socket_->write(data);
+
+    if (written != data.size()) {
+        emit error("发送数据库切换消息失败");
+        return false;
+    }
+
+    socket_->flush();
+    lastActivityTime_ = QDateTime::currentMSecsSinceEpoch();
+
+    LOG_INFO(QString("Sent database switch to: %1").arg(databaseName));
     return true;
 }
 
@@ -443,9 +506,9 @@ void ClientManager::onEncrypted() {
 }
 
 void ClientManager::onSslErrors(const QList<QSslError>& errors) {
-    // Log all SSL errors
+    // Log all SSL errors with more detail
     for (const QSslError& error : errors) {
-        LOG_WARN(QString("SSL error: %1").arg(error.errorString()));
+        LOG_WARN(QString("SSL error [%1]: %2").arg(static_cast<int>(error.error())).arg(error.errorString()));
     }
 
     // We ignore Qt's built-in SSL verification errors because we use fingerprint verification
@@ -454,25 +517,150 @@ void ClientManager::onSslErrors(const QList<QSslError>& errors) {
     if (sslSocket) {
         // Ignore expected errors related to self-signed certificates
         bool hasCriticalError = false;
+        QStringList criticalErrorMessages;
+        
         for (const QSslError& error : errors) {
+            // 检查是否为可忽略的错误
             if (error.error() != QSslError::SelfSignedCertificate &&
                 error.error() != QSslError::SelfSignedCertificateInChain &&
                 error.error() != QSslError::CertificateUntrusted &&
-                error.error() != QSslError::HostNameMismatch) {
+                error.error() != QSslError::HostNameMismatch &&
+                error.error() != QSslError::UnableToGetLocalIssuerCertificate &&
+                error.error() != QSslError::UnableToVerifyFirstCertificate) {
                 hasCriticalError = true;
-                break;
+                criticalErrorMessages.append(error.errorString());
             }
         }
 
         if (!hasCriticalError) {
             // Ignore non-critical errors (we use fingerprint verification)
+            LOG_INFO(QString("Ignoring %1 non-critical SSL errors for fingerprint-based verification").arg(errors.size()));
             sslSocket->ignoreSslErrors(errors);
         } else {
-            QString errorMsg = QString("严重的TLS错误: %1").arg(errors.first().errorString());
+            QString errorMsg = QString("严重的TLS错误: %1").arg(criticalErrorMessages.join("; "));
             LOG_ERROR(errorMsg);
             emit sslError(errorMsg);
         }
     }
+}
+
+void ClientManager::attemptReconnection() {
+    // 清理当前连接
+    if (socket_) {
+        socket_->deleteLater();
+        socket_ = nullptr;
+    }
+
+    // 设置重试定时器（延迟2秒后重试）
+    if (!retryTimer_) {
+        retryTimer_ = new QTimer(this);
+        connect(retryTimer_, &QTimer::timeout, this, &ClientManager::onRetryConnection);
+        retryTimer_->setSingleShot(true);
+    }
+
+    retryTimer_->start(2000);  // 2秒后重试
+}
+
+void ClientManager::onRetryConnection() {
+    LOG_INFO(QString("Attempting reconnection (retry %1/%2)").arg(currentRetryCount_).arg(maxRetries_));
+    
+    // 重新尝试连接，但不重置重试计数器
+    ConnectionParams params = connectionParams_;
+    
+    // 根据是否启用SSL创建相应的套接字
+    if (params.sslEnabled) {
+        LOG_INFO("Creating SSL socket for secure connection (retry)");
+        QSslSocket* sslSocket = new QSslSocket(this);
+
+        // Configure SSL socket with more robust settings
+        sslSocket->setPeerVerifyMode(QSslSocket::VerifyNone);
+        sslSocket->setProtocol(QSsl::TlsV1_2OrLater);
+        
+        // 使用默认SSL配置但允许更灵活的握手
+        QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
+        sslConfig.setProtocol(QSsl::TlsV1_2OrLater);
+        sslSocket->setSslConfiguration(sslConfig);
+        
+        // Connect SSL-specific signals
+        connect(sslSocket, &QSslSocket::encrypted, this, &ClientManager::onEncrypted);
+        connect(sslSocket, &QSslSocket::sslErrors, this, &ClientManager::onSslErrors);
+
+        socket_ = sslSocket;
+    } else {
+        LOG_INFO("Creating standard TCP socket (retry)");
+        socket_ = new QTcpSocket(this);
+    }
+
+    // 连接通用信号槽
+    connect(socket_, &QTcpSocket::connected, this, &ClientManager::onConnected);
+    connect(socket_, &QTcpSocket::disconnected, this, &ClientManager::onDisconnected);
+    connect(socket_, &QTcpSocket::readyRead, this, &ClientManager::onReadyRead);
+    connect(socket_, &QTcpSocket::errorOccurred, this, &ClientManager::onError);
+
+    // 连接到服务器
+    if (params.sslEnabled) {
+        QSslSocket* sslSocket = qobject_cast<QSslSocket*>(socket_);
+        sslSocket->connectToHostEncrypted(params.host, params.port);
+    } else {
+        socket_->connectToHost(params.host, params.port);
+    }
+
+    // 等待连接建立（增加到30秒超时）
+    if (!socket_->waitForConnected(30000)) {
+        QString errorMsg = socket_->errorString();
+        
+        // 如果还有重试机会，继续重试
+        if (currentRetryCount_ < maxRetries_) {
+            currentRetryCount_++;
+            updateConnectionStatus(QString("重试连接失败，继续重试 (%1/%2): %3")
+                                 .arg(currentRetryCount_).arg(maxRetries_).arg(errorMsg));
+            attemptReconnection();
+            return;
+        } else {
+            updateConnectionStatus(QString("连接失败，已达到最大重试次数: %1").arg(errorMsg));
+            emit error(errorMsg);
+            return;
+        }
+    }
+
+    // 如果是SSL连接，等待加密建立
+    if (params.sslEnabled) {
+        QSslSocket* sslSocket = qobject_cast<QSslSocket*>(socket_);
+        if (!sslSocket->waitForEncrypted(60000)) {
+            QString errorMsg = QString("TLS握手失败: %1").arg(sslSocket->errorString());
+            
+            // 如果还有重试机会，继续重试
+            if (currentRetryCount_ < maxRetries_) {
+                currentRetryCount_++;
+                updateConnectionStatus(QString("TLS握手重试失败，继续重试 (%1/%2): %3")
+                                     .arg(currentRetryCount_).arg(maxRetries_).arg(errorMsg));
+                attemptReconnection();
+                return;
+            } else {
+                updateConnectionStatus(QString("TLS握手失败，已达到最大重试次数: %1").arg(errorMsg));
+                emit sslError(errorMsg);
+                return;
+            }
+        }
+    }
+
+    // 连接成功，重置重试计数器
+    resetRetryCounter();
+    
+    // 初始化心跳定时器
+    if (!heartbeatTimer_) {
+        heartbeatTimer_ = new QTimer(this);
+        connect(heartbeatTimer_, &QTimer::timeout, this, &ClientManager::onHeartbeatTimeout);
+        heartbeatTimer_->start(heartbeatInterval_);
+    }
+
+    // 记录最后活动时间
+    lastActivityTime_ = QDateTime::currentMSecsSinceEpoch();
+}
+
+void ClientManager::resetRetryCounter() {
+    currentRetryCount_ = 0;
+    LOG_INFO("Retry counter reset - connection successful");
 }
 
 } // namespace qindb

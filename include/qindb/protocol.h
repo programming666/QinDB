@@ -1,16 +1,17 @@
-#ifndef QINDB_PROTOCOL_H
+#ifndef QINDB_PROTOCOL_H  // 防止重复包含该头文件
 #define QINDB_PROTOCOL_H
 
-#include <QtCore/QByteArray>
-#include <QtCore/QString>
-#include <QtCore/QVariant>
+#include <QtCore/QByteArray>  // Qt字节数组类
+#include <QtCore/QString>     // Qt字符串类
+#include <QtCore/QVariant>    // Qt变体类型类
 #include <QtCore/QVector>
-#include <cstdint>
+#include <cstdint>  // 定义qindb命名空间
 
 namespace qindb {
 
 /**
  * @brief 网络协议版本
+ * 定义协议的版本号，用于客户端和服务器之间的版本匹配
  */
 constexpr uint16_t PROTOCOL_VERSION = 1;
 
@@ -35,6 +36,7 @@ enum class MessageType : uint8_t {
     // 查询相关
     QUERY_REQUEST      = 0x10,
     QUERY_RESPONSE     = 0x11,
+    DATABASE_SWITCH    = 0x12,
 
     // 错误处理
     ERROR_RESPONSE     = 0x20,
@@ -102,6 +104,7 @@ struct QueryResponse {
     uint64_t rowsAffected;        // 影响的行数
     QVector<ColumnInfo> columns;  // 列定义
     QVector<QVector<QVariant>> rows;  // 行数据
+    QString currentDatabase;      // 当前数据库名（用于数据库切换通知）
 
     QueryResponse()
         : status(QueryStatus::SUCCESS)
@@ -156,6 +159,16 @@ struct ErrorResponse {
 
     ErrorResponse()
         : errorCode(0) {}
+};
+
+/**
+ * @brief DATABASE_SWITCH 消息数据
+ */
+struct DatabaseSwitchMessage {
+    QString databaseName;  // 数据库名
+
+    DatabaseSwitchMessage() {}
+    DatabaseSwitchMessage(const QString& db) : databaseName(db) {}
 };
 
 /**
