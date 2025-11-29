@@ -18,6 +18,7 @@
 #include "qindb/connection_string_parser.h"
 #include <QFile>
 #include <QDateTime>
+#include <QElapsedTimer>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -660,7 +661,9 @@ int runClientMode(const QString& connectionString) {
     
     // 更新查询响应处理，设置标志和数据库状态跟踪
     QObject::disconnect(&clientManager, &qindb::ClientManager::queryResponse, nullptr, nullptr);
-    QObject::connect(&clientManager, &qindb::ClientManager::queryResponse, [&waitingForResponse, &currentDatabase](const qindb::QueryResponse& response) {
+    QElapsedTimer queryTimer;
+    bool timingEnabled = false;
+    QObject::connect(&clientManager, &qindb::ClientManager::queryResponse, [&waitingForResponse, &currentDatabase, &timingEnabled, &queryTimer](const qindb::QueryResponse& response) {
         displayQueryResponse(response);
         
         // 只有在响应中包含数据库切换信息时才更新本地状态
@@ -676,6 +679,10 @@ int runClientMode(const QString& connectionString) {
         }
         
         waitingForResponse = false;
+        if (timingEnabled) {
+            qint64 elapsed = queryTimer.isValid() ? queryTimer.elapsed() : 0;
+            std::wcout << L"耗时 " << elapsed << L" ms\n";
+        }
     });
 
     // 客户端交互循环
@@ -707,6 +714,90 @@ int runClientMode(const QString& connectionString) {
         }
         line = line.substr(start, end - start + 1);
 
+        // 宏指令处理
+        QString macroLine = QString::fromStdWString(line).trimmed();
+        if (macroLine.startsWith('\\')) {
+            QString cmd = macroLine.mid(1).trimmed();
+            QStringList parts = cmd.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+            if (!parts.isEmpty()) {
+                QString op = parts[0];
+                if (op == "timing" && parts.size() >= 2) {
+                    QString v = parts[1].toLower();
+                    timingEnabled = (v == "on" || v == "true" || v == "1");
+                    std::wcout << (timingEnabled ? L"✓ 计时已开启\n" : L"✓ 计时已关闭\n");
+                    continue;
+                }
+                auto sendAndWait = [&](const QString& sql) {
+                    if (clientManager.sendQuery(sql)) {
+                        waitingForResponse = true;
+                        if (timingEnabled) queryTimer.restart();
+                        int waitCount = 0;
+                        while (waitingForResponse && waitCount < 50) {
+                            QCoreApplication::processEvents();
+                            QThread::msleep(100);
+                            waitCount++;
+                        }
+                        if (waitingForResponse) {
+                            std::wcout << L"✗ 等待服务器响应超时\n" << std::endl;
+                            waitingForResponse = false;
+                        }
+                    } else {
+                        std::wcout << L"✗ 发送查询失败\n" << std::endl;
+                    }
+                };
+                if (op == "l") { sendAndWait("SHOW DATABASES"); continue; }
+                if (op == "dt") { sendAndWait("SHOW TABLES"); continue; }
+                if (op == "di" && parts.size() >= 2) { sendAndWait(QString("SHOW INDEXES FROM %1").arg(parts[1])); continue; }
+                if (op == "c" && parts.size() >= 2) {
+                    QString dbName = parts[1];
+                    if (clientManager.sendDatabaseSwitch(dbName)) {
+                        waitingForResponse = true;
+                        int waitCount = 0;
+                        while (waitingForResponse && waitCount < 50) {
+                            QCoreApplication::processEvents();
+                            QThread::msleep(100);
+                            waitCount++;
+                        }
+                        if (waitingForResponse) {
+                            std::wcout << L"✗ 等待服务器响应超时\n" << std::endl;
+                            waitingForResponse = false;
+                        }
+                    } else {
+                        std::wcout << L"✗ 发送数据库切换消息失败\n" << std::endl;
+                    }
+                    continue;
+                }
+                if (op == "begin") { sendAndWait("BEGIN"); continue; }
+                if (op == "commit") { sendAndWait("COMMIT"); continue; }
+                if (op == "rollback") { sendAndWait("ROLLBACK"); continue; }
+                if (op == "save") { sendAndWait("SAVE"); continue; }
+                if (op == "vacuum") { QString arg = parts.size()>=2 ? parts[1] : QString(); sendAndWait(arg.isEmpty() ? "VACUUM" : QString("VACUUM %1").arg(arg)); continue; }
+                if (op == "analyze") { QString arg = parts.size()>=2 ? parts[1] : QString(); sendAndWait(arg.isEmpty() ? "ANALYZE" : QString("ANALYZE TABLE %1").arg(arg)); continue; }
+                if (op == "explain") {
+                    int p = cmd.indexOf(' ');
+                    QString rest = p>=0 ? cmd.mid(p+1) : QString();
+                    if (!rest.isEmpty()) { sendAndWait(QString("EXPLAIN %1").arg(rest)); }
+                    continue;
+                }
+                if (op == "i" && parts.size() >= 2) {
+                    QString filePath = cmd.mid(2).trimmed();
+                    QFile f(filePath);
+                    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                        QString all = QString::fromUtf8(f.readAll());
+                        f.close();
+                        QStringList stmts = all.split(';', Qt::SkipEmptyParts);
+                        for (QString s : stmts) {
+                            s = s.trimmed();
+                            if (!s.isEmpty()) sendAndWait(s);
+                        }
+                    } else {
+                        std::wcout << L"✗ 无法打开文件\n";
+                    }
+                    continue;
+                }
+            }
+        }
+        
         // 添加到缓冲区
         if (!sqlBuffer.empty()) {
             sqlBuffer += L" ";
@@ -801,6 +892,7 @@ int runClientMode(const QString& connectionString) {
         // 对于非USE DATABASE命令，正常发送查询到服务器
         if (clientManager.sendQuery(sql)) {
             waitingForResponse = true;
+            if (timingEnabled) queryTimer.restart();
 
             // 保存最后执行的SQL语句，用于检测USE DATABASE命令
             lastExecutedQuery = sql;
@@ -830,6 +922,8 @@ int runClientMode(const QString& connectionString) {
 void runInteractiveMode(qindb::Executor* executor, qindb::DatabaseManager* dbManager) {
     std::wstring line;
     std::wstring sqlBuffer;
+    bool timingEnabled = false;
+    QElapsedTimer timer;
 
     while (true) {
         // 显示提示符
@@ -858,6 +952,58 @@ void runInteractiveMode(qindb::Executor* executor, qindb::DatabaseManager* dbMan
         }
         line = line.substr(start, end - start + 1);
 
+        // 宏指令处理
+        QString macroLine = QString::fromStdWString(line).trimmed();
+        if (macroLine.startsWith('\\')) {
+            QString cmd = macroLine.mid(1).trimmed();
+            QStringList parts = cmd.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+            if (!parts.isEmpty()) {
+                QString op = parts[0];
+                if (op == "timing" && parts.size() >= 2) {
+                    QString v = parts[1].toLower();
+                    timingEnabled = (v == "on" || v == "true" || v == "1");
+                    std::wcout << (timingEnabled ? L"✓ 计时已开启\n" : L"✓ 计时已关闭\n");
+                    sqlBuffer.clear();
+                    continue;
+                }
+                auto execSql = [&](const QString& s) {
+                    if (timingEnabled) timer.restart();
+                    analyzeSql(s, executor);
+                    if (timingEnabled) {
+                        std::wcout << L"耗时 " << timer.elapsed() << L" ms\n";
+                    }
+                };
+                if (op == "l") { execSql("SHOW DATABASES"); sqlBuffer.clear(); continue; }
+                if (op == "dt") { execSql("SHOW TABLES"); sqlBuffer.clear(); continue; }
+                if (op == "di" && parts.size() >= 2) { execSql(QString("SHOW INDEXES FROM %1").arg(parts[1])); sqlBuffer.clear(); continue; }
+                if (op == "c" && parts.size() >= 2) { execSql(QString("USE DATABASE %1").arg(parts[1])); sqlBuffer.clear(); continue; }
+                if (op == "begin") { execSql("BEGIN"); sqlBuffer.clear(); continue; }
+                if (op == "commit") { execSql("COMMIT"); sqlBuffer.clear(); continue; }
+                if (op == "rollback") { execSql("ROLLBACK"); sqlBuffer.clear(); continue; }
+                if (op == "save") { execSql("SAVE"); sqlBuffer.clear(); continue; }
+                if (op == "vacuum") { QString arg = parts.size()>=2 ? parts[1] : QString(); execSql(arg.isEmpty() ? "VACUUM" : QString("VACUUM %1").arg(arg)); sqlBuffer.clear(); continue; }
+                if (op == "analyze") { QString arg = parts.size()>=2 ? parts[1] : QString(); execSql(arg.isEmpty() ? "ANALYZE" : QString("ANALYZE TABLE %1").arg(arg)); sqlBuffer.clear(); continue; }
+                if (op == "explain") { int p = cmd.indexOf(' '); QString rest = p>=0 ? cmd.mid(p+1) : QString(); if (!rest.isEmpty()) { execSql(QString("EXPLAIN %1").arg(rest)); } sqlBuffer.clear(); continue; }
+                if (op == "i" && parts.size() >= 2) {
+                    QString filePath = cmd.mid(2).trimmed();
+                    QFile f(filePath);
+                    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                        QString all = QString::fromUtf8(f.readAll());
+                        f.close();
+                        QStringList stmts = all.split(';', Qt::SkipEmptyParts);
+                        for (QString s : stmts) {
+                            s = s.trimmed();
+                            if (!s.isEmpty()) execSql(s);
+                        }
+                    } else {
+                        std::wcout << L"✗ 无法打开文件\n";
+                    }
+                    sqlBuffer.clear();
+                    continue;
+                }
+            }
+        }
+        
         // 添加到缓冲区
         if (!sqlBuffer.empty()) {
             sqlBuffer += L" ";
