@@ -9,18 +9,23 @@ namespace qindb {  // 定义qindb命名空间
 /**
  * @brief 密码哈希工具类
  *
- * 使用 SHA-256 + Salt 方案存储密码。
- * 存储格式: Base64(SHA256(password + salt) + salt)
+ * 使用 Argon2id 算法存储密码。
+ * Argon2id是2015年密码哈希竞赛的获胜者，提供强大的抗GPU和抗侧信道攻击能力。
+ *
+ * 存储格式: $argon2id$v=19$m=65536,t=3,p=1$salt$hash
  */
 class PasswordHasher {
 public:
     /**
      * @brief 生成密码哈希
      * @param password 明文密码
-     * @return Base64编码的哈希字符串（64字符）
+     * @return Argon2id编码的哈希字符串
      *
-     * 存储格式: hash(32字节) + salt(16字节) = 48字节
-     * Base64编码后: 64字符
+     * 使用默认参数:
+     * - 内存成本: 64MB
+     * - 时间成本: 3次迭代
+     * - 并行度: 1
+     * - 哈希长度: 32字节
      */
     static QString hashPassword(const QString& password);
 
@@ -50,6 +55,19 @@ public:
      */
     static QString getPasswordStrength(const QString& password);
 
+    /**
+     * @brief 使用自定义参数生成密码哈希
+     * @param password 明文密码
+     * @param memoryCostKB 内存成本（KB）
+     * @param timeCost 时间成本（迭代次数）
+     * @param parallelism 并行度
+     * @return Argon2id编码的哈希字符串
+     */
+    static QString hashPasswordWithParams(const QString& password,
+                                         uint32_t memoryCostKB = 65536,
+                                         uint32_t timeCost = 3,
+                                         uint32_t parallelism = 1);
+
 private:
     /**
      * @brief 生成随机Salt
@@ -58,16 +76,11 @@ private:
      */
     static QByteArray generateSalt(int length);
 
-    /**
-     * @brief 计算SHA-256哈希
-     * @param data 待哈希的数据
-     * @return 哈希结果（32字节）
-     */
-    static QByteArray computeHash(const QByteArray& data);
-
-    static constexpr int SALT_LENGTH = 16;      // Salt长度（字节）
-    static constexpr int HASH_LENGTH = 32;      // SHA-256哈希长度（字节）
-    static constexpr int MIN_PASSWORD_LENGTH = 8;  // 最小密码长度
+    static constexpr int SALT_LENGTH = 16;             // Salt长度（字节）
+    static constexpr int MIN_PASSWORD_LENGTH = 8;     // 最小密码长度
+    static constexpr uint32_t DEFAULT_MEMORY_COST = 65536;  // 默认64MB
+    static constexpr uint32_t DEFAULT_TIME_COST = 3;        // 默认3次迭代
+    static constexpr uint32_t DEFAULT_PARALLELISM = 1;      // 默认并行度1
 };
 
 } // namespace qindb

@@ -660,15 +660,19 @@ int runClientMode(const QString& connectionString) {
     
     // 更新查询响应处理，设置标志和数据库状态跟踪
     QObject::disconnect(&clientManager, &qindb::ClientManager::queryResponse, nullptr, nullptr);
-    QObject::connect(&clientManager, &qindb::ClientManager::queryResponse, [&waitingForResponse, &currentDatabase, &lastExecutedQuery](const qindb::QueryResponse& response) {
+    QObject::connect(&clientManager, &qindb::ClientManager::queryResponse, [&waitingForResponse, &currentDatabase](const qindb::QueryResponse& response) {
         displayQueryResponse(response);
         
         // 只有在响应中包含数据库切换信息时才更新本地状态
         // 服务器会在DATABASE_SWITCH响应中包含currentDatabase字段
-        if (response.status == qindb::QueryStatus::SUCCESS && 
+        if (response.status == qindb::QueryStatus::SUCCESS &&
             !response.currentDatabase.isEmpty()) {
+            // 更新本地数据库状态
+            QString oldDatabase = currentDatabase;
             currentDatabase = response.currentDatabase;
-            LOG_INFO(QString("Client: Database switched to '%1'").arg(currentDatabase));
+            LOG_INFO(QString("Client: Database switched from '%1' to '%2'")
+                        .arg(oldDatabase.isEmpty() ? "(none)" : oldDatabase)
+                        .arg(currentDatabase));
         }
         
         waitingForResponse = false;
@@ -769,9 +773,21 @@ int runClientMode(const QString& connectionString) {
                     // 发送数据库切换消息到服务器
                     if (clientManager.sendDatabaseSwitch(dbName)) {
                         LOG_INFO(QString("Sent database switch message to server: %1").arg(dbName));
-                        // 更新本地状态，不发送SQL查询，避免重复处理
-                        currentDatabase = dbName;
-                        std::wcout << L"✓ 数据库切换成功: " << dbName.toStdWString() << L"\n" << std::endl;
+                        // 等待服务器响应更新本地状态
+                        waitingForResponse = true;
+                        
+                        // 等待响应（最多5秒）
+                        int waitCount = 0;
+                        while (waitingForResponse && waitCount < 50) {
+                            QCoreApplication::processEvents();
+                            QThread::msleep(100);
+                            waitCount++;
+                        }
+                        
+                        if (waitingForResponse) {
+                            std::wcout << L"✗ 等待服务器响应超时\n" << std::endl;
+                            waitingForResponse = false;
+                        }
                         continue;  // 跳过SQL查询发送，避免重复处理
                     } else {
                         LOG_ERROR("Failed to send database switch message to server");
@@ -1167,9 +1183,9 @@ int main(int argc, char *argv[])
             }
         }
 
-        // 启动网络服务器（如果在配置中启用或指定了服务器模式）
+        // 启动网络服务器（仅在命令行指定服务器模式时）
         qindb::Server* server = nullptr;
-        bool shouldStartServer = config.isNetworkEnabled() || isServerMode;
+        bool shouldStartServer = isServerMode;
 
         if (shouldStartServer) {
             LOG_INFO("Network server enabled in configuration or command line");
@@ -1221,8 +1237,8 @@ int main(int argc, char *argv[])
                 server = nullptr;
             }
         } else {
-            LOG_INFO("Network server is disabled");
-            std::wcout << L"提示: 网络服务器未启用。使用 --server 参数或在 qindb.ini 中设置 Network/Enabled=true 来启用。\n" << std::endl;
+            LOG_INFO("Network server is disabled in interactive mode");
+            std::wcout << L"提示: 交互式模式下不启动网络服务器。使用 --server 参数启动服务器。\n" << std::endl;
         }
 
         // 确定运行模式
@@ -1251,7 +1267,7 @@ int main(int argc, char *argv[])
 
             return exitCode;
         } else {
-            // 进入交互式模式(同时网络服务器在后台运行)
+            // 进入交互式模式
             LOG_INFO("Entering interactive mode");
             runInteractiveMode(&executor, &databaseManager);
 

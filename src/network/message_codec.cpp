@@ -246,6 +246,9 @@ QByteArray MessageCodec::encodeQueryResponse(const QueryResponse& result) {
         }
     }
 
+    // 当前数据库名称（用于客户端提示符更新）
+    encodeString(stream, result.currentDatabase);
+
     return encodeMessage(MessageType::QUERY_RESPONSE, payload);
 }
 
@@ -311,6 +314,9 @@ std::optional<QueryResponse> MessageCodec::decodeQueryResponse(const QByteArray&
 
         result.rows.append(row);
     }
+
+    // 读取当前数据库名称
+    result.currentDatabase = decodeString(stream);
 
     if (stream.status() != QDataStream::Ok) {
         return std::nullopt;

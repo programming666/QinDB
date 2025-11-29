@@ -60,6 +60,7 @@ target_sources(qindb_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/auth/auth_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/auth/permission_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/auth/password_hasher.cpp
+    ${CMAKE_SOURCE_DIR}/src/auth/argon2id.cpp
     ${CMAKE_SOURCE_DIR}/src/executor/executor.cpp
     ${CMAKE_SOURCE_DIR}/src/executor/expression_evaluator.cpp
     ${CMAKE_SOURCE_DIR}/src/optimizer/query_rewriter.cpp
@@ -470,6 +471,7 @@ target_sources(test_auth_permission PRIVATE
     ${CMAKE_SOURCE_DIR}/src/auth/auth_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/auth/permission_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/auth/password_hasher.cpp
+    ${CMAKE_SOURCE_DIR}/src/auth/argon2id.cpp
     ${CMAKE_SOURCE_DIR}/src/catalog/catalog.cpp
     ${CMAKE_SOURCE_DIR}/src/catalog/catalog_db_backend.cpp
     ${CMAKE_SOURCE_DIR}/src/storage/buffer_pool_manager.cpp
@@ -516,6 +518,7 @@ target_sources(test_executor PRIVATE
     ${CMAKE_SOURCE_DIR}/src/auth/auth_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/auth/permission_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/auth/password_hasher.cpp
+    ${CMAKE_SOURCE_DIR}/src/auth/argon2id.cpp
     ${CMAKE_SOURCE_DIR}/src/storage/buffer_pool_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/storage/disk_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/storage/page.cpp
@@ -571,6 +574,32 @@ endif()
 target_sources(test_ip_whitelist PRIVATE
     ${CMAKE_SOURCE_DIR}/src/utils/logger.cpp
 )
+
+# Argon2id 测试可执行文件
+add_executable(test_argon2id
+    test_argon2id.cpp
+)
+
+target_include_directories(test_argon2id PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/tests
+)
+
+target_link_libraries(test_argon2id PRIVATE
+    Qt6::Core
+)
+
+if(WIN32)
+    target_link_options(test_argon2id PRIVATE -Wl,-subsystem,console)
+endif()
+
+target_sources(test_argon2id PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/auth/argon2id.cpp
+    ${CMAKE_SOURCE_DIR}/src/auth/password_hasher.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/logger.cpp
+)
+
+add_test(NAME test_argon2id COMMAND test_argon2id)
 
 add_test(NAME test_ip_whitelist COMMAND test_ip_whitelist)
 

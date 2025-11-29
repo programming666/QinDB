@@ -7,3 +7,4 @@ build/
 qindb.db/
 *.crt
 *.key
+*.sql

@@ -286,6 +286,9 @@ void ClientConnection::handleQueryRequest(const QByteArray& payload) {
             } else {
                 result.resultType = ResultType::TABLE_DATA;
             }
+
+            // 设置当前数据库名称（用于客户端提示符更新）
+            result.currentDatabase = currentDatabase_;
         } else {
             result.status = QueryStatus::RUNTIME_ERROR;
 
