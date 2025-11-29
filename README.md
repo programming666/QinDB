@@ -263,6 +263,58 @@ Port=24678                  # 服务器端口
 MaxConnections=1000         # 最大连接数
 ```
 
+### TLS 加密与证书生成
+
+- 功能概述：服务器支持 TLS 加密连接，并内置自签名证书生成，完全使用 C++ 实现，不依赖外部命令。
+- 平台实现：
+  - Windows 使用 CryptoAPI 生成 RSA 密钥与自签名 X.509 证书；代码参考 `src/network/certificate_generator.cpp:28`。
+  - Linux 使用 OpenSSL C API 生成 RSA 密钥与自签名 X.509 证书；代码参考 `src/network/certificate_generator.cpp:210`。
+- 服务器启用 TLS：
+
+```cpp
+#include "qindb/server.h"
+
+qindb::Server server(dbManager, authManager);
+// 若证书/私钥不存在且 autoGenerate=true，将自动生成并保存
+server.enableTLS("server_cert.pem", "server_key.pem", /*autoGenerate=*/true);
+server.start("0.0.0.0", 24678);
+```
+
+- 自动生成与加载流程：实现入口见 `src/network/server.cpp:92`；具体生成调用 `TLSConfig::generateSelfSigned`（`src/network/tls_config.cpp:76`），最终落盘通过 `TLSConfig::saveToFiles`。
+- 构建依赖：
+  - Windows：无需额外安装；链接系统库 `Crypt32`、`Advapi32`（CMake 已配置）。
+  - Linux：需要 OpenSSL 开发库；示例安装命令：
+
+```bash
+# Debian/Ubuntu
+sudo apt-get update && sudo apt-get install -y libssl-dev
+
+# CentOS/RHEL
+sudo yum install -y openssl-devel
+```
+
+- CMake 链接示例（已在项目中按平台自动配置）：
+
+```cmake
+target_link_libraries(qindb PRIVATE
+    Qt::Core Qt::Network
+    $<$<BOOL:${WIN32}>:Crypt32>
+    $<$<BOOL:${WIN32}>:Advapi32>
+    $<$<BOOL:${UNIX}>:OpenSSL::Crypto>
+    $<$<BOOL:${UNIX}>:OpenSSL::SSL>
+)
+```
+
+- 测试验证：
+  - 运行 TLS 相关测试用例（名称已注册到 CTest）：
+
+```bash
+ctest -R test_tls_handshake -C Release --output-on-failure
+ctest -R test_tls_handshake_simple -C Release --output-on-failure
+ctest -R test_ssl_error_handler -C Release --output-on-failure
+```
+
+
 ## 技术架构
 
 ### 核心组件
