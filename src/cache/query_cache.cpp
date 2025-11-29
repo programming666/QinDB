@@ -388,28 +388,63 @@ int QueryCache::evictLRU() {
         return 0;
     }
 
-    // 找到最少最近使用的条目（lastAccessedAt 最早的）
-    QString lruKey;
-    QDateTime oldestAccess = QDateTime::currentDateTime();
-
-    for (auto it = cache_.begin(); it != cache_.end(); ++it) {
+    auto it = cache_.begin();
+    QString lruKey = it.key();
+    QDateTime oldestAccess = it.value().lastAccessedAt;
+    ++it;
+    for (; it != cache_.end(); ++it) {
         if (it.value().lastAccessedAt < oldestAccess) {
             oldestAccess = it.value().lastAccessedAt;
             lruKey = it.key();
         }
     }
 
-    if (lruKey.isEmpty()) {
+    auto victim = cache_.find(lruKey);
+    if (victim == cache_.end()) {
         return 0;
     }
 
-    // 删除 LRU 条目
-    auto it = cache_.find(lruKey);
-    if (it != cache_.end()) {
-        CacheEntry& entry = it.value();
-        totalMemoryBytes_ -= entry.memorySizeBytes;
+    CacheEntry& entry = victim.value();
+    totalMemoryBytes_ -= entry.memorySizeBytes;
+    for (const QString& table : entry.affectedTables) {
+        if (tableToQueries_.contains(table)) {
+            tableToQueries_[table].remove(lruKey);
+            if (tableToQueries_[table].isEmpty()) {
+                tableToQueries_.remove(table);
+            }
+        }
+    }
+    cache_.erase(victim);
+    totalEvictions_++;
+    LOG_DEBUG(QString("Evicted LRU entry: %1").arg(lruKey.left(50)));
+    return 1;
+}
 
-        // 从 tableToQueries_ 映射中删除
+int QueryCache::evictToFreeMemory(uint64_t requiredBytes) {
+    int evictedCount = 0;
+    uint64_t freedBytes = 0;
+
+    while (freedBytes < requiredBytes && !cache_.isEmpty()) {
+        auto it = cache_.begin();
+        QString lruKey = it.key();
+        QDateTime oldestAccess = it.value().lastAccessedAt;
+        ++it;
+        for (; it != cache_.end(); ++it) {
+            if (it.value().lastAccessedAt < oldestAccess) {
+                oldestAccess = it.value().lastAccessedAt;
+                lruKey = it.key();
+            }
+        }
+
+        auto victim = cache_.find(lruKey);
+        if (victim == cache_.end()) {
+            break;
+        }
+
+        CacheEntry& entry = victim.value();
+        uint64_t entrySize = entry.memorySizeBytes;
+        totalMemoryBytes_ -= entrySize;
+        freedBytes += entrySize;
         for (const QString& table : entry.affectedTables) {
             if (tableToQueries_.contains(table)) {
                 tableToQueries_[table].remove(lruKey);
@@ -418,65 +453,12 @@ int QueryCache::evictLRU() {
                 }
             }
         }
-
-        cache_.erase(it);
+        cache_.erase(victim);
         totalEvictions_++;
-
-        LOG_DEBUG(QString("Evicted LRU entry: %1").arg(lruKey.left(50)));
-        return 1;
-    }
-
-    return 0;
-}
-
-int QueryCache::evictToFreeMemory(uint64_t requiredBytes) {
-    int evictedCount = 0;
-    uint64_t freedBytes = 0;
-
-    // 持续驱逐 LRU 条目，直到释放足够的内存
-    while (freedBytes < requiredBytes && !cache_.isEmpty()) {
-        // 找到 LRU 条目
-        QString lruKey;
-        QDateTime oldestAccess = QDateTime::currentDateTime();
-
-        for (auto it = cache_.begin(); it != cache_.end(); ++it) {
-            if (it.value().lastAccessedAt < oldestAccess) {
-                oldestAccess = it.value().lastAccessedAt;
-                lruKey = it.key();
-            }
-        }
-
-        if (lruKey.isEmpty()) {
-            break;
-        }
-
-        // 删除 LRU 条目
-        auto it = cache_.find(lruKey);
-        if (it != cache_.end()) {
-            CacheEntry& entry = it.value();
-            uint64_t entrySize = entry.memorySizeBytes;
-
-            totalMemoryBytes_ -= entrySize;
-            freedBytes += entrySize;
-
-            // 从 tableToQueries_ 映射中删除
-            for (const QString& table : entry.affectedTables) {
-                if (tableToQueries_.contains(table)) {
-                    tableToQueries_[table].remove(lruKey);
-                    if (tableToQueries_[table].isEmpty()) {
-                        tableToQueries_.remove(table);
-                    }
-                }
-            }
-
-            cache_.erase(it);
-            totalEvictions_++;
-            evictedCount++;
-
-            LOG_DEBUG(QString("Evicted entry to free memory: %1 (freed %2 bytes)")
-                         .arg(lruKey.left(50))
-                         .arg(entrySize));
-        }
+        evictedCount++;
+        LOG_DEBUG(QString("Evicted entry to free memory: %1 (freed %2 bytes)")
+                     .arg(lruKey.left(50))
+                     .arg(entrySize));
     }
 
     LOG_DEBUG(QString("Evicted %1 entries, freed %2 bytes (required %3 bytes)")
