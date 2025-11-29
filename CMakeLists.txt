@@ -30,6 +30,9 @@ if(MSVC)
 endif()
 
 find_package(Qt6 6 REQUIRED COMPONENTS Core Network)
+if(UNIX)
+    find_package(OpenSSL QUIET)
+endif()
 
 qt_standard_project_setup()
 
@@ -56,6 +59,10 @@ target_link_libraries(qindb
     PRIVATE
         Qt::Core
         Qt::Network
+        $<$<BOOL:${WIN32}>:Crypt32>
+        $<$<BOOL:${WIN32}>:Advapi32>
+        $<$<BOOL:${UNIX}>:OpenSSL::Crypto>
+        $<$<BOOL:${UNIX}>:OpenSSL::SSL>
 )
 
 # 静态链接选项

@@ -94,6 +94,10 @@ target_include_directories(test_tls_handshake PRIVATE
 target_link_libraries(test_tls_handshake PRIVATE
     Qt6::Core
     Qt6::Network
+    $<$<BOOL:${WIN32}>:Crypt32>
+    $<$<BOOL:${WIN32}>:Advapi32>
+    $<$<BOOL:${UNIX}>:OpenSSL::Crypto>
+    $<$<BOOL:${UNIX}>:OpenSSL::SSL>
 )
 
 if(WIN32)
@@ -125,6 +129,10 @@ target_include_directories(test_tls_handshake_simple PRIVATE
 target_link_libraries(test_tls_handshake_simple PRIVATE
     Qt6::Core
     Qt6::Network
+    $<$<BOOL:${WIN32}>:Crypt32>
+    $<$<BOOL:${WIN32}>:Advapi32>
+    $<$<BOOL:${UNIX}>:OpenSSL::Crypto>
+    $<$<BOOL:${UNIX}>:OpenSSL::SSL>
 )
 
 if(WIN32)
@@ -154,6 +162,10 @@ target_include_directories(test_ssl_error_handler PRIVATE
 target_link_libraries(test_ssl_error_handler PRIVATE
     Qt6::Core
     Qt6::Network
+    $<$<BOOL:${WIN32}>:Crypt32>
+    $<$<BOOL:${WIN32}>:Advapi32>
+    $<$<BOOL:${UNIX}>:OpenSSL::Crypto>
+    $<$<BOOL:${UNIX}>:OpenSSL::SSL>
 )
 
 if(WIN32)

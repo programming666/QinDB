@@ -2,9 +2,18 @@
 #include "qindb/logger.h"
 #include <QFile>
 #include <QCryptographicHash>
-#include <QProcess>
-#include <QTemporaryFile>
 #include <QDateTime>
+#ifdef _WIN32
+#include <windows.h>
+#include <wincrypt.h>
+#include <QUuid>
+#elif defined(__linux__)
+#include <openssl/evp.h>
+#include <openssl/rsa.h>
+#include <openssl/pem.h>
+#include <openssl/x509.h>
+#include <openssl/bn.h>
+#endif
 
 namespace qindb {
 
@@ -16,17 +25,181 @@ QPair<QSslCertificate, QSslKey> CertificateGenerator::generateSelfSignedCertific
     LOG_INFO(QString("Generating self-signed certificate for CN=%1, O=%2, validity=%3 days")
         .arg(commonName).arg(organization).arg(validityDays));
 
-    // 生成私钥
-    QSslKey privateKey = generateRSAKey();
-    if (privateKey.isNull()) {
-        LOG_ERROR("Failed to generate RSA key");
+#ifdef _WIN32
+    auto toW = [](const QString& s) { return std::wstring(s.toStdWString()); };
+
+    HCRYPTPROV hProv = NULL;
+    HCRYPTKEY hKey = NULL;
+    PCCERT_CONTEXT pCert = NULL;
+
+    QString container = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    std::wstring wContainer = toW(container);
+
+    if (!CryptAcquireContextW(&hProv, wContainer.c_str(), MS_ENH_RSA_AES_PROV_W, PROV_RSA_AES, CRYPT_NEWKEYSET)) {
+        LOG_ERROR("CryptAcquireContext failed");
         return QPair<QSslCertificate, QSslKey>();
     }
 
-    // 创建证书
-    QSslCertificate cert = createX509Certificate(privateKey, privateKey, commonName, organization, validityDays);
-    if (cert.isNull()) {
-        LOG_ERROR("Failed to create X.509 certificate");
+    if (!CryptGenKey(hProv, CALG_RSA_SIGN, (2048 << 16) | CRYPT_EXPORTABLE, &hKey)) {
+        LOG_ERROR("CryptGenKey failed");
+        CryptAcquireContextW(&hProv, wContainer.c_str(), MS_ENH_RSA_AES_PROV_W, PROV_RSA_AES, CRYPT_DELETEKEYSET);
+        return QPair<QSslCertificate, QSslKey>();
+    }
+
+    QString x500 = QString("CN=%1, O=%2").arg(commonName).arg(organization);
+    std::wstring wx500 = toW(x500);
+    DWORD nameLen = 0;
+    if (!CertStrToNameW(X509_ASN_ENCODING, wx500.c_str(), CERT_OID_NAME_STR, NULL, nullptr, &nameLen, nullptr)) {
+        LOG_ERROR("CertStrToName size query failed");
+        CryptDestroyKey(hKey);
+        CryptAcquireContextW(&hProv, wContainer.c_str(), MS_ENH_RSA_AES_PROV_W, PROV_RSA_AES, CRYPT_DELETEKEYSET);
+        return QPair<QSslCertificate, QSslKey>();
+    }
+    QByteArray nameBuf;
+    nameBuf.resize(nameLen);
+    if (!CertStrToNameW(X509_ASN_ENCODING, wx500.c_str(), CERT_OID_NAME_STR, NULL, reinterpret_cast<BYTE*>(nameBuf.data()), &nameLen, nullptr)) {
+        LOG_ERROR("CertStrToName encode failed");
+        CryptDestroyKey(hKey);
+        CryptAcquireContextW(&hProv, wContainer.c_str(), MS_ENH_RSA_AES_PROV_W, PROV_RSA_AES, CRYPT_DELETEKEYSET);
+        return QPair<QSslCertificate, QSslKey>();
+    }
+    CERT_NAME_BLOB subject = { nameLen, reinterpret_cast<BYTE*>(nameBuf.data()) };
+
+    CRYPT_KEY_PROV_INFO keyProvInfo = {};
+    keyProvInfo.pwszContainerName = const_cast<wchar_t*>(wContainer.c_str());
+    keyProvInfo.pwszProvName = const_cast<wchar_t*>(MS_ENH_RSA_AES_PROV_W);
+    keyProvInfo.dwProvType = PROV_RSA_AES;
+    keyProvInfo.dwKeySpec = AT_SIGNATURE;
+
+    CRYPT_ALGORITHM_IDENTIFIER sigAlg = {};
+    sigAlg.pszObjId = const_cast<char*>("1.2.840.113549.1.1.11");
+
+    SYSTEMTIME startTime = {};
+    SYSTEMTIME endTime = {};
+    QDateTime now = QDateTime::currentDateTimeUtc();
+    auto wStart = now.addSecs(-60).toUTC().toString("yyyy-MM-ddTHH:mm:ss");
+    auto wEnd = now.addDays(validityDays).toUTC().toString("yyyy-MM-ddTHH:mm:ss");
+    FILETIME ftStart = {};
+    FILETIME ftEnd = {};
+    QDateTime startQt = now.addSecs(-60);
+    QDateTime endQt = now.addDays(validityDays);
+    ULONGLONG startTicks = 116444736000000000ULL + static_cast<ULONGLONG>(startQt.toSecsSinceEpoch()) * 10000000ULL;
+    ULONGLONG endTicks = 116444736000000000ULL + static_cast<ULONGLONG>(endQt.toSecsSinceEpoch()) * 10000000ULL;
+    ftStart.dwLowDateTime = static_cast<DWORD>(startTicks & 0xFFFFFFFFULL);
+    ftStart.dwHighDateTime = static_cast<DWORD>((startTicks >> 32) & 0xFFFFFFFFULL);
+    ftEnd.dwLowDateTime = static_cast<DWORD>(endTicks & 0xFFFFFFFFULL);
+    ftEnd.dwHighDateTime = static_cast<DWORD>((endTicks >> 32) & 0xFFFFFFFFULL);
+    FileTimeToSystemTime(&ftStart, &startTime);
+    FileTimeToSystemTime(&ftEnd, &endTime);
+
+    pCert = CertCreateSelfSignCertificate(hProv, &subject, 0, &keyProvInfo, &sigAlg, &startTime, &endTime, nullptr);
+    if (!pCert) {
+        LOG_ERROR("CertCreateSelfSignCertificate failed");
+        CryptDestroyKey(hKey);
+        CryptAcquireContextW(&hProv, wContainer.c_str(), MS_ENH_RSA_AES_PROV_W, PROV_RSA_AES, CRYPT_DELETEKEYSET);
+        return QPair<QSslCertificate, QSslKey>();
+    }
+
+    DWORD blobLen = 0;
+    if (!CryptExportKey(hKey, 0, PRIVATEKEYBLOB, 0, nullptr, &blobLen)) {
+        LOG_ERROR("CryptExportKey size query failed");
+        CertFreeCertificateContext(pCert);
+        CryptDestroyKey(hKey);
+        CryptAcquireContextW(&hProv, wContainer.c_str(), MS_ENH_RSA_AES_PROV_W, PROV_RSA_AES, CRYPT_DELETEKEYSET);
+        return QPair<QSslCertificate, QSslKey>();
+    }
+    QByteArray blob;
+    blob.resize(blobLen);
+    if (!CryptExportKey(hKey, 0, PRIVATEKEYBLOB, 0, reinterpret_cast<BYTE*>(blob.data()), &blobLen)) {
+        LOG_ERROR("CryptExportKey failed");
+        CertFreeCertificateContext(pCert);
+        CryptDestroyKey(hKey);
+        CryptAcquireContextW(&hProv, wContainer.c_str(), MS_ENH_RSA_AES_PROV_W, PROV_RSA_AES, CRYPT_DELETEKEYSET);
+        return QPair<QSslCertificate, QSslKey>();
+    }
+
+    auto be = [](const QByteArray& le) {
+        QByteArray r = le;
+        std::reverse(r.begin(), r.end());
+        int i = 0;
+        while (i < r.size() && r[i] == '\0') i++;
+        return r.mid(i);
+    };
+    auto derLen = [](int len) {
+        QByteArray out;
+        if (len < 128) { out.append(char(len)); return out; }
+        QByteArray buf;
+        int t = len;
+        while (t > 0) { buf.prepend(char(t & 0xFF)); t >>= 8; }
+        out.append(char(0x80 | buf.size()));
+        out += buf;
+        return out;
+    };
+    auto derInt = [&](const QByteArray& in) {
+        QByteArray v = in;
+        int i = 0;
+        while (i < v.size() && v[i] == '\0') i++;
+        v = v.mid(i);
+        if (v.isEmpty()) v = QByteArray(1, '\0');
+        if ((static_cast<unsigned char>(v[0]) & 0x80) != 0) v.prepend('\0');
+        QByteArray out;
+        out.append(char(0x02));
+        out += derLen(v.size());
+        out += v;
+        return out;
+    };
+    auto derSeq = [&](const QList<QByteArray>& elems) {
+        QByteArray content;
+        for (const auto& e : elems) content += e;
+        QByteArray out;
+        out.append(char(0x30));
+        out += derLen(content.size());
+        out += content;
+        return out;
+    };
+    auto intFromDword = [&](DWORD v) {
+        QByteArray b;
+        DWORD t = v;
+        while (t > 0) { b.prepend(char(t & 0xFF)); t >>= 8; }
+        if (b.isEmpty()) b.append(char(0));
+        return b;
+    };
+
+    const BYTE* p = reinterpret_cast<const BYTE*>(blob.constData());
+    const BLOBHEADER* hdr = reinterpret_cast<const BLOBHEADER*>(p);
+    p += sizeof(BLOBHEADER);
+    const RSAPUBKEY* rsa = reinterpret_cast<const RSAPUBKEY*>(p);
+    p += sizeof(RSAPUBKEY);
+    int len = rsa->bitlen / 8;
+    QByteArray modulus(reinterpret_cast<const char*>(p), len); p += len;
+    QByteArray prime1(reinterpret_cast<const char*>(p), len/2); p += len/2;
+    QByteArray prime2(reinterpret_cast<const char*>(p), len/2); p += len/2;
+    QByteArray exp1(reinterpret_cast<const char*>(p), len/2); p += len/2;
+    QByteArray exp2(reinterpret_cast<const char*>(p), len/2); p += len/2;
+    QByteArray coeff(reinterpret_cast<const char*>(p), len/2); p += len/2;
+    QByteArray privExp(reinterpret_cast<const char*>(p), len);
+
+    QByteArray der = derSeq({
+        derInt(QByteArray(1, '\0')),
+        derInt(be(modulus)),
+        derInt(intFromDword(rsa->pubexp)),
+        derInt(be(privExp)),
+        derInt(be(prime1)),
+        derInt(be(prime2)),
+        derInt(be(exp1)),
+        derInt(be(exp2)),
+        derInt(be(coeff))
+    });
+
+    QSslKey privateKey(der, QSsl::Rsa, QSsl::Der, QSsl::PrivateKey);
+    QSslCertificate cert(QByteArray(reinterpret_cast<const char*>(pCert->pbCertEncoded), pCert->cbCertEncoded), QSsl::Der);
+
+    CertFreeCertificateContext(pCert);
+    CryptDestroyKey(hKey);
+    CryptAcquireContextW(&hProv, wContainer.c_str(), MS_ENH_RSA_AES_PROV_W, PROV_RSA_AES, CRYPT_DELETEKEYSET);
+
+    if (privateKey.isNull() || cert.isNull()) {
+        LOG_ERROR("Generated certificate or key is null");
         return QPair<QSslCertificate, QSslKey>();
     }
 
@@ -34,38 +207,66 @@ QPair<QSslCertificate, QSslKey> CertificateGenerator::generateSelfSignedCertific
     LOG_INFO(QString("Certificate fingerprint: %1").arg(getCertificateFingerprint(cert)));
 
     return QPair<QSslCertificate, QSslKey>(cert, privateKey);
+#elif defined(__linux__)
+    EVP_PKEY* pkey = EVP_PKEY_new();
+    RSA* rsa = RSA_new();
+    BIGNUM* e = BN_new();
+    BN_set_word(e, RSA_F4);
+    RSA_generate_key_ex(rsa, 2048, e, nullptr);
+    EVP_PKEY_set1_RSA(pkey, rsa);
+
+    X509* x509 = X509_new();
+    ASN1_INTEGER_set(X509_get_serialNumber(x509), 1);
+    X509_gmtime_adj(X509_get_notBefore(x509), 0);
+    X509_gmtime_adj(X509_get_notAfter(x509), static_cast<long>(validityDays) * 24L * 60L * 60L);
+    X509_set_pubkey(x509, pkey);
+    X509_NAME* name = X509_get_subject_name(x509);
+    QByteArray cn = commonName.toUtf8();
+    QByteArray org = organization.toUtf8();
+    X509_NAME_add_entry_by_NID(name, NID_commonName, MBSTRING_UTF8, reinterpret_cast<const unsigned char*>(cn.constData()), cn.size(), -1, 0);
+    X509_NAME_add_entry_by_NID(name, NID_organizationName, MBSTRING_UTF8, reinterpret_cast<const unsigned char*>(org.constData()), org.size(), -1, 0);
+    X509_set_issuer_name(x509, name);
+    X509_sign(x509, pkey, EVP_sha256());
+
+    BIO* certBio = BIO_new(BIO_s_mem());
+    PEM_write_bio_X509(certBio, x509);
+    char* certDataPtr = nullptr;
+    long certLen = BIO_get_mem_data(certBio, &certDataPtr);
+    QByteArray certPem(certDataPtr, certLen);
+
+    BIO* keyBio = BIO_new(BIO_s_mem());
+    PEM_write_bio_PrivateKey(keyBio, pkey, nullptr, nullptr, 0, nullptr, nullptr);
+    char* keyDataPtr = nullptr;
+    long keyLen = BIO_get_mem_data(keyBio, &keyDataPtr);
+    QByteArray keyPem(keyDataPtr, keyLen);
+
+    QSslCertificate cert(certPem, QSsl::Pem);
+    QSslKey privateKey(keyPem, QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey);
+
+    BIO_free(certBio);
+    BIO_free(keyBio);
+    X509_free(x509);
+    EVP_PKEY_free(pkey);
+    RSA_free(rsa);
+    BN_free(e);
+
+    if (privateKey.isNull() || cert.isNull()) {
+        LOG_ERROR("Generated certificate or key is null");
+        return QPair<QSslCertificate, QSslKey>();
+    }
+
+    LOG_INFO("Self-signed certificate generated successfully");
+    LOG_INFO(QString("Certificate fingerprint: %1").arg(getCertificateFingerprint(cert)));
+
+    return QPair<QSslCertificate, QSslKey>(cert, privateKey);
+#else
+    LOG_ERROR("Certificate generation not supported on this platform without external commands");
+    return QPair<QSslCertificate, QSslKey>();
+#endif
 }
 
 QSslKey CertificateGenerator::generateRSAKey(int keySize) {
-    LOG_INFO(QString("Generating RSA key pair (size=%1)").arg(keySize));
-
-    // 使用openssl命令生成密钥
-    QProcess process;
-    process.start("openssl", QStringList()
-        << "genrsa"
-        << QString::number(keySize));
-
-    if (!process.waitForStarted()) {
-        LOG_WARN("OpenSSL not found, trying alternative method...");
-        // 后备方案：返回空密钥，调用者需要使用预生成的证书
-        return QSslKey();
-    }
-
-    if (!process.waitForFinished(30000)) { // 30秒超时
-        LOG_ERROR("RSA key generation timed out");
-        return QSslKey();
-    }
-
-    QByteArray keyData = process.readAllStandardOutput();
-    QSslKey key(keyData, QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey);
-
-    if (key.isNull()) {
-        LOG_ERROR("Failed to parse generated RSA key");
-    } else {
-        LOG_INFO("RSA key generated successfully");
-    }
-
-    return key;
+    return QSslKey();
 }
 
 QSslCertificate CertificateGenerator::createX509Certificate(
@@ -75,97 +276,7 @@ QSslCertificate CertificateGenerator::createX509Certificate(
     const QString& organization,
     int validityDays)
 {
-    LOG_INFO("Creating X.509 certificate");
-
-    // 保存私钥到临时文件
-    QTemporaryFile keyFile;
-    if (!keyFile.open()) {
-        LOG_ERROR("Failed to create temporary key file");
-        return QSslCertificate();
-    }
-    keyFile.write(privateKey.toPem());
-    keyFile.flush();
-
-    // 创建配置文件
-    QTemporaryFile configFile;
-    if (!configFile.open()) {
-        LOG_ERROR("Failed to create temporary config file");
-        return QSslCertificate();
-    }
-
-    QString config = QString(
-        "[ req ]\n"
-        "default_bits = 2048\n"
-        "distinguished_name = req_distinguished_name\n"
-        "x509_extensions = v3_ca\n"
-        "prompt = no\n"
-        "\n"
-        "[ req_distinguished_name ]\n"
-        "C = CN\n"
-        "ST = Beijing\n"
-        "L = Beijing\n"
-        "O = %1\n"
-        "CN = %2\n"
-        "\n"
-        "[ v3_ca ]\n"
-        "subjectKeyIdentifier = hash\n"
-        "authorityKeyIdentifier = keyid:always,issuer\n"
-        "basicConstraints = CA:true\n"
-        "keyUsage = digitalSignature, keyEncipherment\n"
-    ).arg(organization).arg(commonName);
-
-    configFile.write(config.toUtf8());
-    configFile.flush();
-
-    // 创建临时证书文件
-    QTemporaryFile certFile;
-    if (!certFile.open()) {
-        LOG_ERROR("Failed to create temporary cert file");
-        return QSslCertificate();
-    }
-    certFile.close();  // 关闭文件，让openssl写入
-
-    // 使用openssl生成自签名证书
-    QProcess process;
-    QStringList args;
-    args << "req" << "-new" << "-x509"
-         << "-key" << keyFile.fileName()
-         << "-out" << certFile.fileName()  // 输出到临时文件
-         << "-days" << QString::number(validityDays)
-         << "-config" << configFile.fileName();
-
-    process.start("openssl", args);
-
-    if (!process.waitForStarted()) {
-        LOG_ERROR("Failed to start openssl process");
-        return QSslCertificate();
-    }
-
-    if (!process.waitForFinished(30000)) {
-        LOG_ERROR("Certificate generation timed out");
-        return QSslCertificate();
-    }
-
-    // 读取生成的证书
-    if (!certFile.open()) {
-        LOG_ERROR("Failed to open generated certificate file");
-        QString errorMsg = QString::fromUtf8(process.readAllStandardError());
-        LOG_ERROR(QString("OpenSSL error: %1").arg(errorMsg));
-        return QSslCertificate();
-    }
-
-    QByteArray certData = certFile.readAll();
-    QSslCertificate cert(certData, QSsl::Pem);
-
-    if (cert.isNull()) {
-        LOG_ERROR("Failed to parse generated certificate");
-        QString errorMsg = QString::fromUtf8(process.readAllStandardError());
-        LOG_ERROR(QString("OpenSSL error: %1").arg(errorMsg));
-    } else {
-        LOG_INFO("X.509 certificate created successfully");
-    }
-
-    return cert;
+    return QSslCertificate();
 }
 
 bool CertificateGenerator::saveCertificate(const QSslCertificate& cert, const QString& certPath) {
