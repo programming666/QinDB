@@ -8,3 +8,6 @@ qindb.db/
 *.crt
 *.key
 *.sql
+cli-installer/
+.vscode/
+qindb.zip
