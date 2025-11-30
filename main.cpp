@@ -16,9 +16,13 @@
 #include "qindb/server.h"
 #include "qindb/client_manager.h"
 #include "qindb/connection_string_parser.h"
+#include "qindb/result_exporter.h"
 #include <QFile>
 #include <QDateTime>
 #include <QElapsedTimer>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -230,6 +234,20 @@ void writeAnalysisLog(const QString& sql, const QString& content) {
     }
 }
 
+void writeSlowQueryLog(const QString& sql, qint64 elapsedMs) {
+    using namespace qindb;
+    const Config& config = Config::instance();
+    if (!config.isSlowQueryEnabled()) return;
+    if (elapsedMs < config.getSlowQueryThresholdMs()) return;
+    QFile logFile(config.getSlowQueryLogPath());
+    if (logFile.open(QIODevice::Append | QIODevice::Text)) {
+        QTextStream out(&logFile);
+        QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
+        out << "[" << timestamp << "] " << elapsedMs << " ms | " << sql << "\n";
+        logFile.close();
+    }
+}
+
 void analyzeSql(const QString& sql, qindb::Executor* executor) {
     using namespace qindb;
     const Config& config = Config::instance();
@@ -297,7 +315,11 @@ void analyzeSql(const QString& sql, qindb::Executor* executor) {
         logStream << "\n3. 执行:\n";
         logStream << "─────────────────────────────────────────────────────────\n";
 
+        QElapsedTimer execTimer;
+        execTimer.start();
         execResult = executor->execute(ast);
+        qint64 elapsedMs = execTimer.elapsed();
+        writeSlowQueryLog(sql, elapsedMs);
 
         if (execResult.success) {
             logStream << "✓ 执行成功!\n";
@@ -545,6 +567,14 @@ void displayQueryResponse(const qindb::QueryResponse& response) {
     }
 }
 
+qindb::QueryResult convertResponseToResult(const qindb::QueryResponse& response) {
+    qindb::QueryResult r;
+    r.success = (response.status == qindb::QueryStatus::SUCCESS);
+    for (const auto& c : response.columns) r.columnNames.append(c.name);
+    r.rows = response.rows;
+    return r;
+}
+
 /**
  * @brief 运行客户端模式（使用连接字符串）
  * @param connectionString 连接字符串
@@ -663,7 +693,7 @@ int runClientMode(const QString& connectionString) {
     QObject::disconnect(&clientManager, &qindb::ClientManager::queryResponse, nullptr, nullptr);
     QElapsedTimer queryTimer;
     bool timingEnabled = false;
-    QObject::connect(&clientManager, &qindb::ClientManager::queryResponse, [&waitingForResponse, &currentDatabase, &timingEnabled, &queryTimer](const qindb::QueryResponse& response) {
+    QObject::connect(&clientManager, &qindb::ClientManager::queryResponse, [&waitingForResponse, &currentDatabase, &timingEnabled, &queryTimer, &lastExecutedQuery](const qindb::QueryResponse& response) {
         displayQueryResponse(response);
         
         // 只有在响应中包含数据库切换信息时才更新本地状态
@@ -679,10 +709,11 @@ int runClientMode(const QString& connectionString) {
         }
         
         waitingForResponse = false;
+        qint64 elapsed = queryTimer.isValid() ? queryTimer.elapsed() : 0;
         if (timingEnabled) {
-            qint64 elapsed = queryTimer.isValid() ? queryTimer.elapsed() : 0;
             std::wcout << L"耗时 " << elapsed << L" ms\n";
         }
+        writeSlowQueryLog(lastExecutedQuery, elapsed);
     });
 
     // 客户端交互循环
@@ -795,6 +826,88 @@ int runClientMode(const QString& connectionString) {
                     }
                     continue;
                 }
+                if (op == "export") {
+                    int p = cmd.indexOf(' ');
+                    QString rest = p>=0 ? cmd.mid(p+1).trimmed() : QString();
+                    int toPos = rest.lastIndexOf(QRegularExpression("\\s+to\\s+", QRegularExpression::CaseInsensitiveOption));
+                    if (toPos < 0) { std::wcout << L"✗ 用法: \\export <SQL> to <文件路径>\n"; continue; }
+                    QString q = rest.left(toPos).trimmed();
+                    QString filePath = rest.mid(toPos).replace(QRegularExpression("^\\s*to\\s+", QRegularExpression::CaseInsensitiveOption), "").trimmed();
+                    std::optional<qindb::QueryResponse> respOpt;
+                    QMetaObject::Connection c = QObject::connect(&clientManager, &qindb::ClientManager::queryResponse, [&](const qindb::QueryResponse& r){ respOpt = r; });
+                    sendAndWait(q);
+                    QObject::disconnect(c);
+                    if (!respOpt.has_value() || respOpt->status != qindb::QueryStatus::SUCCESS) { std::wcout << L"✗ 查询失败，无法导出\n"; continue; }
+                    QString lower = filePath.toLower();
+                    qindb::ExportFormat fmt = qindb::ExportFormat::CSV;
+                    if (lower.endsWith(".json")) fmt = qindb::ExportFormat::JSON; else if (lower.endsWith(".xml")) fmt = qindb::ExportFormat::XML;
+                    qindb::QueryResult res = convertResponseToResult(respOpt.value());
+                    bool ok = qindb::ResultExporter::exportToFile(res, fmt, filePath);
+                    if (ok) { std::wcout << L"✓ 已导出到 " << filePath.toStdWString() << L"\n"; } else { std::wcout << L"✗ 导出失败\n"; }
+                    continue;
+                }
+                if (op == "import") {
+                    QString rest = cmd.mid(6).trimmed();
+                    int sp = rest.indexOf(' ');
+                    if (sp <= 0) { std::wcout << L"✗ 用法: \\import <表名> <文件路径>\n"; continue; }
+                    QString table = rest.left(sp).trimmed();
+                    QString filePath = rest.mid(sp+1).trimmed();
+                    QFile f(filePath);
+                    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) { std::wcout << L"✗ 无法打开文件\n"; continue; }
+                    QString lower = filePath.toLower();
+                    auto sendInsert = [&](const QString& sql){ sendAndWait(sql); };
+                    if (lower.endsWith(".json")) {
+                        QByteArray data = f.readAll();
+                        f.close();
+                        QJsonParseError e; QJsonDocument doc = QJsonDocument::fromJson(data, &e);
+                        if (e.error != QJsonParseError::NoError || !doc.isArray()) { std::wcout << L"✗ JSON 格式错误\n"; continue; }
+                        QJsonArray arr = doc.array();
+                        if (arr.isEmpty()) { std::wcout << L"✓ 空数据\n"; continue; }
+                        QStringList cols = arr.first().toObject().keys();
+                        for (const auto& v : arr) {
+                            QJsonObject obj = v.toObject();
+                            QStringList vals;
+                            for (const QString& c : cols) {
+                                QJsonValue jv = obj.value(c);
+                                if (jv.isNull() || jv.isUndefined()) vals << "NULL";
+                                else {
+                                    QString s;
+                                    if (jv.isString()) s = jv.toString();
+                                    else if (jv.isDouble()) s = QString::number(jv.toDouble(), 'g', 15);
+                                    else if (jv.isBool()) s = jv.toBool() ? "true" : "false";
+                                    else if (jv.isObject()) s = QString::fromUtf8(QJsonDocument(jv.toObject()).toJson(QJsonDocument::Compact));
+                                    else if (jv.isArray()) s = QString::fromUtf8(QJsonDocument(jv.toArray()).toJson(QJsonDocument::Compact));
+                                    else s = jv.toVariant().toString();
+                                    s.replace("'", "''");
+                                    vals << QString("'%1'").arg(s);
+                                }
+                            }
+                            QString sql = QString("INSERT INTO %1(%2) VALUES(%3)").arg(table).arg(cols.join(",")).arg(vals.join(","));
+                            sendInsert(sql);
+                        }
+                        std::wcout << L"✓ 导入完成\n";
+                    } else {
+                        QTextStream in(&f);
+                        QString header = in.readLine();
+                        if (header.isNull()) { std::wcout << L"✗ 空文件\n"; f.close(); continue; }
+                        auto parseCsv = [](const QString& line){ QStringList out; QString cur; bool inq=false; for (QChar ch : line) { if (ch=='"') { inq=!inq; continue; } if (ch==',' && !inq) { out<<cur; cur.clear(); } else { cur.append(ch); } } out<<cur; for (int i=0;i<out.size();++i) out[i]=out[i].trimmed(); return out; };
+                        QStringList cols = parseCsv(header);
+                        while (!in.atEnd()) {
+                            QString lineStr = in.readLine();
+                            if (lineStr.trimmed().isEmpty()) continue;
+                            QStringList fields = parseCsv(lineStr);
+                            QStringList vals;
+                            for (const QString& s0 : fields) { QString s=s0; s.replace("'", "''"); vals << QString("'%1'").arg(s); }
+                            QString sql = QString("INSERT INTO %1(%2) VALUES(%3)").arg(table).arg(cols.join(",")).arg(vals.join(","));
+                            sendInsert(sql);
+                        }
+                        f.close();
+                        std::wcout << L"✓ 导入完成\n";
+                    }
+                    continue;
+                }
+                if (op == "stats") { std::wcout << L"暂不支持在客户端获取服务器统计\n"; continue; }
+                if (op == "doctor") { std::wcout << L"客户端健康检查: 已连接=" << (clientManager.isAuthenticated()?L"true":L"false") << L" TLS=" << (params.sslEnabled?L"true":L"false") << L"\n"; continue; }
             }
         }
         
@@ -998,6 +1111,107 @@ void runInteractiveMode(qindb::Executor* executor, qindb::DatabaseManager* dbMan
                     } else {
                         std::wcout << L"✗ 无法打开文件\n";
                     }
+                    sqlBuffer.clear();
+                    continue;
+                }
+                if (op == "export") {
+                    int p = cmd.indexOf(' ');
+                    QString rest = p>=0 ? cmd.mid(p+1).trimmed() : QString();
+                    int toPos = rest.lastIndexOf(QRegularExpression("\\s+to\\s+", QRegularExpression::CaseInsensitiveOption));
+                    if (toPos < 0) { std::wcout << L"✗ 用法: \\export <SQL> to <文件路径>\n"; sqlBuffer.clear(); continue; }
+                    QString q = rest.left(toPos).trimmed();
+                    QString filePath = rest.mid(toPos).replace(QRegularExpression("^\\s*to\\s+", QRegularExpression::CaseInsensitiveOption), "").trimmed();
+                    qindb::Parser parser(q);
+                    auto ast = parser.parse();
+                    if (!ast) { std::wcout << L"✗ 解析失败\n"; sqlBuffer.clear(); continue; }
+                    qindb::QueryResult r = executor->execute(ast);
+                    if (!r.success) { std::wcout << L"✗ 执行失败\n"; sqlBuffer.clear(); continue; }
+                    QString lower = filePath.toLower();
+                    qindb::ExportFormat fmt = qindb::ExportFormat::CSV;
+                    if (lower.endsWith(".json")) fmt = qindb::ExportFormat::JSON; else if (lower.endsWith(".xml")) fmt = qindb::ExportFormat::XML;
+                    bool ok = qindb::ResultExporter::exportToFile(r, fmt, filePath);
+                    if (ok) { std::wcout << L"✓ 已导出到 " << filePath.toStdWString() << L"\n"; } else { std::wcout << L"✗ 导出失败\n"; }
+                    sqlBuffer.clear();
+                    continue;
+                }
+                if (op == "import") {
+                    QString rest = cmd.mid(6).trimmed();
+                    int sp = rest.indexOf(' ');
+                    if (sp <= 0) { std::wcout << L"✗ 用法: \\import <表名> <文件路径>\n"; sqlBuffer.clear(); continue; }
+                    QString table = rest.left(sp).trimmed();
+                    QString filePath = rest.mid(sp+1).trimmed();
+                    QFile f(filePath);
+                    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) { std::wcout << L"✗ 无法打开文件\n"; sqlBuffer.clear(); continue; }
+                    QString lower = filePath.toLower();
+                    auto execInsert = [&](const QString& sql){ execSql(sql); };
+                    if (lower.endsWith(".json")) {
+                        QByteArray data = f.readAll();
+                        f.close();
+                        QJsonParseError e; QJsonDocument doc = QJsonDocument::fromJson(data, &e);
+                        if (e.error != QJsonParseError::NoError || !doc.isArray()) { std::wcout << L"✗ JSON 格式错误\n"; sqlBuffer.clear(); continue; }
+                        QJsonArray arr = doc.array();
+                        if (arr.isEmpty()) { std::wcout << L"✓ 空数据\n"; sqlBuffer.clear(); continue; }
+                        QStringList cols = arr.first().toObject().keys();
+                        for (const auto& v : arr) {
+                            QJsonObject obj = v.toObject();
+                            QStringList vals;
+                            for (const QString& c : cols) {
+                                QJsonValue jv = obj.value(c);
+                                if (jv.isNull() || jv.isUndefined()) vals << "NULL";
+                                else {
+                                    QString s;
+                                    if (jv.isString()) s = jv.toString();
+                                    else if (jv.isDouble()) s = QString::number(jv.toDouble(), 'g', 15);
+                                    else if (jv.isBool()) s = jv.toBool() ? "true" : "false";
+                                    else if (jv.isObject()) s = QString::fromUtf8(QJsonDocument(jv.toObject()).toJson(QJsonDocument::Compact));
+                                    else if (jv.isArray()) s = QString::fromUtf8(QJsonDocument(jv.toArray()).toJson(QJsonDocument::Compact));
+                                    else s = jv.toVariant().toString();
+                                    s.replace("'", "''");
+                                    vals << QString("'%1'").arg(s);
+                                }
+                            }
+                            QString sql = QString("INSERT INTO %1(%2) VALUES(%3)").arg(table).arg(cols.join(",")).arg(vals.join(","));
+                            execInsert(sql);
+                        }
+                        std::wcout << L"✓ 导入完成\n";
+                    } else {
+                        QTextStream in(&f);
+                        QString header = in.readLine();
+                        if (header.isNull()) { std::wcout << L"✗ 空文件\n"; f.close(); sqlBuffer.clear(); continue; }
+                        auto parseCsv = [](const QString& line){ QStringList out; QString cur; bool inq=false; for (QChar ch : line) { if (ch=='"') { inq=!inq; continue; } if (ch==',' && !inq) { out<<cur; cur.clear(); } else { cur.append(ch); } } out<<cur; for (int i=0;i<out.size();++i) out[i]=out[i].trimmed(); return out; };
+                        QStringList cols = parseCsv(header);
+                        while (!in.atEnd()) {
+                            QString lineStr = in.readLine();
+                            if (lineStr.trimmed().isEmpty()) continue;
+                            QStringList fields = parseCsv(lineStr);
+                            QStringList vals;
+                            for (const QString& s0 : fields) { QString s=s0; s.replace("'", "''"); vals << QString("'%1'").arg(s); }
+                            QString sql = QString("INSERT INTO %1(%2) VALUES(%3)").arg(table).arg(cols.join(",")).arg(vals.join(","));
+                            execInsert(sql);
+                        }
+                        f.close();
+                        std::wcout << L"✓ 导入完成\n";
+                    }
+                    sqlBuffer.clear();
+                    continue;
+                }
+                if (op == "stats") {
+                    auto* bp = dbManager->getCurrentBufferPool();
+                    auto bpStats = bp ? bp->getStats() : qindb::BufferPoolManager::Stats{};
+                    auto qc = executor->getQueryCacheStats();
+                    auto tc = executor->getTableCacheStats();
+                    std::wcout << L"缓冲池: size=" << (long long)bpStats.poolSize << L" dirty=" << (long long)bpStats.numDirtyPages << L" hit=" << (long long)bpStats.hitCount << L" miss=" << (long long)bpStats.missCount << L"\n";
+                    std::wcout << L"查询缓存: entries=" << (long long)qc.totalEntries << L" hits=" << (long long)qc.totalHits << L" misses=" << (long long)qc.totalMisses << L" evictions=" << (long long)qc.totalEvictions << L" memBytes=" << (long long)qc.totalMemoryBytes << L" hitRate=" << qc.hitRate << L"\n";
+                    std::wcout << L"表缓存: tables=" << (long long)tc.totalCachedTables << L" memBytes=" << (long long)tc.totalMemoryBytes << L" hits=" << (long long)tc.cacheHits << L" misses=" << (long long)tc.cacheMisses << L" invalidations=" << (long long)tc.invalidations << L" hitRate=" << tc.hitRate << L"\n";
+                    sqlBuffer.clear();
+                    continue;
+                }
+                if (op == "doctor") {
+                    auto* bp = dbManager->getCurrentBufferPool();
+                    auto* dm = dbManager->getCurrentDiskManager();
+                    auto* cat = dbManager->getCurrentCatalog();
+                    bool ok = (bp && dm && cat);
+                    std::wcout << L"系统健康: components=" << (ok?L"OK":L"FAIL") << L" poolSize=" << (bp? (long long)bp->getStats().poolSize : 0) << L"\n";
                     sqlBuffer.clear();
                     continue;
                 }

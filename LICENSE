@@ -1,126 +1,124 @@
-非商业性互惠公共许可（NCRPL v1.1）​​
-零、语言优先性​
-  本协议中文版本为原始版本，英文版本为翻译版本。
-  若中英文版本存在语义差异，​以中文版条款为准，英文版本仅作参考。
-  任何第三方对协议的引用或解释，均需以中文版内容为最终依据。
-​一、定义​
-​  本协议​：指《非商业性互惠公共许可》v1.1。
-​  原始作品​：依据本协议发布的源代码、文档、设计或其他原创内容（明确包含数据、算法及接口设计）。
-​  衍生作品​：对原始作品进行修改、翻译、重组、与其他内容结合，​或通过动态链接、服务调用等方式依赖原始作品核心功能形成的作品。
-​  商业化使用​（补充细化）：
-  销售、租赁、订阅原始作品或衍生作品；
-  将作品集成至付费产品或服务（包括SaaS、API服务等间接获利形式）；
-  通过广告、用户数据货币化（如收集用户数据用于定向广告或第三方交易）、募资等获利；
-​  例外​：非营利组织筹款。
-  ​贡献者​：原始作品的版权持有人及后续经其授权的衍生作品修改者。
-  ​预装软件​：指在硬件设备销售或交付时，由制造商、供应商或其他第三方预先安装在设备存储介质中的软件，无论该软件是否作为设备功能的一部分、是否单独收费或是否与设备捆绑销售。
-​二、授予的权利​
-​  非独占、全球性许可​：
-  允许免费使用、复制、分发原始作品及衍生作品。
-​  修改与创作衍生作品​：
-  允许修改原始作品并创建衍生作品，​但必须遵守第三部分的分发要求。
-​  专利授权​（新增）：
-贡献者授予用户不可撤销的、免版税专利许可，覆盖其贡献部分相关专利，​仅限非商业化使用。
-​三、分发要求​
-​ 源代码义务​：
-分发原始作品或衍生作品时，必须提供完整、可编译的源代码​（包括构建脚本及依赖说明）。
-​ 协议一致性​：
+## 互惠公共许可 (Reciprocal Public License, RPL v1.1)
+
+### 零、语言优先性
+
+本协议中文版本为原始版本，英文版本为翻译版本。
+若中英文版本存在语义差异，以中文版条款为准，英文版本仅作参考。
+任何第三方对协议的引用或解释，均需以中文版内容为最终依据。
+
+### 一、定义
+
+**本协议**：指《互惠公共许可》v1.1。
+**原始作品**：依据本协议发布的源代码、文档、设计或其他原创内容（明确包含数据、算法及接口设计）。
+**衍生作品**：对原始作品进行修改、翻译、重组、与其他内容结合，或通过动态链接、服务调用等方式依赖原始作品核心功能形成的作品。
+**贡献者**：原始作品的版权持有人及后续经其授权的衍生作品修改者。
+
+### 二、授予的权利
+
+**非独占、全球性许可**：
+允许免费使用、复制、分发原始作品及衍生作品，**包括商业化使用**。
+**修改与创作衍生作品**：
+允许修改原始作品并创建衍生作品，但必须遵守第三部分的分发要求。
+**专利授权**：
+贡献者授予用户不可撤销的、免版税专利许可，覆盖其贡献部分相关专利。
+
+### 三、分发要求
+
+**源代码义务**：
+分发原始作品或衍生作品时，必须提供完整、可编译的源代码（包括构建脚本及依赖说明）。
+**协议一致性**：
 衍生作品必须采用与本协议完全相同的条款发布（禁止附加额外限制或闭源例外）。
- 署名要求​：
+**署名要求**：
 所有副本及衍生作品需显著保留原始版权声明、许可声明、免责条款及修改记录（新增修改者署名）。
-​四、限制​
-​禁止商业化​：
-任何商业化使用需额外获得贡献者书面授权​（如商业许可双轨制）。
-​ 禁止技术规避​：
-不得通过拆分服务、中间层封装、云服务接口等技术手段绕过非商业限制。
- -兼容性限制​：
-  因条款限制，​本协议与GPL/AGPL等Copyleft协议不兼容，且不得与其他许可证混合使用。
-​禁止预装分发​：
-  未经贡献者事先书面明确授权，不得将原始作品或衍生作品作为预装软件分发在任何硬件设备上，包括但不限于：
-  出厂预装在消费电子设备（如智能手机、平板电脑、个人电脑）中
-  内置于系统镜像或恢复分区
-  作为设备固件的一部分
-  通过OEM渠道预装在新设备上
-​五、免责声明与责任限制​
- ​无担保​：
+
+### 四、限制
+
+**兼容性限制**：
+因条款限制，本协议与GPL/AGPL等Copyleft协议不兼容，且不得与其他许可证混合使用。
+
+### 五、免责声明与责任限制
+
+**无担保**：
 作品按“现状”提供，贡献者不对适用性、安全性、准确性作担保。
- ​责任范围​：
-贡献者不承担任何直接、间接、偶然、特殊或后果性损害​（包括数据损失、商誉损害等）。
-第三方风险：
-  若原始作品包含第三方代码，用户需自行承担合规风险，贡献者不提供连带担保。
-​六、协议终止​
-​ 自动终止​：
-违反协议（如商业化、闭源分发）时，权利自动终止，需立即停止使用并销毁副本。
- 恢复：
-首次违规者可在30天内纠正行为并书面承诺合规后恢复权利（仅限一次机会）。
-​七、其他条款​
- 协议升级​：
-贡献者有权发布新版本协议，用户可选择遵循NCRPL v1.1或后续版本​（但衍生作品需同步升级）。
-法律管辖​：
-本协议受版权法及贡献者所在地法律管辖，争议应通过仲裁解决​（排除集体诉讼）。
- 分离性原则​：
-若部分条款无效，​其余条款仍具有法律效力。
+**责任范围**：
+贡献者不承担任何直接、间接、偶然、特殊或后果性损害（包括数据损失、商誉损害等）。
+**第三方风险**：
+若原始作品包含第三方代码，用户需自行承担合规风险，贡献者不提供连带担保。
+
+### 六、协议终止
+
+**自动终止**：
+违反协议（**如闭源分发**）时，权利自动终止，需立即停止使用并销毁副本。
 
 
-Non-Commercial Reciprocal Public License (NCRPL v1.1)  
-​Section 0: Language Priority​
+### 七、其他条款
+
+**协议升级**：
+贡献者有权发布新版本协议，用户可选择遵循RPL v1.1或后续版本（但衍生作品需同步升级）。
+**法律管辖**：
+本协议受版权法及贡献者所在地法律管辖，争议应通过仲裁解决（排除集体诉讼）。
+**分离性原则**：
+若部分条款无效，其余条款仍具有法律效力。
+
+***
+
+## Reciprocal Public License (RPL v1.1)
+
+### Section 0: Language Priority
+
 This Agreement is originally published in Chinese, and the English version is a translation.
- In case of discrepancies between the Chinese and English versions, the Chinese version shall prevail​ and serve as the definitive interpretation of this Agreement.
+In case of discrepancies between the Chinese and English versions, the Chinese version shall prevail and serve as the definitive interpretation of this Agreement.
 Third-party references or explanations of this Agreement must prioritize the Chinese version as the authoritative source.
-I. Definitions
-This Agreement: Refers to the Non-Commercial Reciprocal Public License version 1.1.  
-Original Work: Source code, documentation, design, or other original content published under this Agreement (explicitly including data, algorithms, and interface designs).  
- Derivative Works: Works created by modifying, translating, reorganizing, integrating with other content, or forming through dynamic linking, service invocation, or other means that depend on the core functionality of the Original Work.  
-Commercial Use (further clarified):  
-  Selling, leasing, or subscribing to the Original Work or Derivative Works;  
-  Integrating the Work into paid products or services (including indirect revenue models such as SaaS, API services);  
-  Generating profits through advertising, user data monetization (e.g., collecting user data for targeted advertising or third-party transactions), or fundraising;  
-  Exception: Fundraising by non-profit organizations.  
-Contributor: The copyright holder of the Original Work and subsequent modifiers authorized by the Contributor.  
-Pre-installed Software: Software pre-installed on hardware devices by manufacturers, suppliers, or third parties at the time of device sale or delivery, regardless of whether such software is part of the device functionality, separately charged, or bundled with the device.
-II. Granted Rights
-Non-Exclusive, Worldwide License:  
-  Allows free use, reproduction, and distribution of the Original Work and Derivative Works.  
-Modification and Creation of Derivative Works:  
-  Permits modification of the Original Work and creation of Derivative Works, provided compliance with the distribution requirements in Section III.  
-Patent Grant (newly added):  
-Contributors grant users an irrevocable, royalty-free patent license covering patents related to their contributions, limited to non-commercial use.  
-III. Distribution Requirements
-Source Code Obligation:  
-  When distributing the Original Work or Derivative Works, complete and compilable source code (including build scripts and dependency instructions) must be provided.  
-Protocol Consistency:  
-  Derivative Works must be published under terms identical to this Agreement (additional restrictions or closed-source exceptions are prohibited).  
-Attribution Requirement:  
-  All copies and Derivative Works must retain, in a prominent manner, the original copyright notice, license notice, disclaimer of warranties, modification records, and new modifier attributions.  
-IV. Limitations
-Prohibition of Commercial Use:  
-  Any commercial use requires additional written authorization from the Contributor (e.g., a dual-track commercial license system).  
-Prohibition of Technical Circumvention:  
-  No acts of technical circumvention (e.g., service splitting, middleware encapsulation, cloud service interfaces) to bypass non-commercial restrictions are permitted.     
-Compatibility Restriction:  
-  This Agreement is incompatible with Copyleft licenses such as GPL/AGPL and must not be combined with other licenses.  
-Without prior written authorization from the Contributor, the Original Work or Derivative Works shall not be distributed as pre-installed software on any hardware devices, including but not limited to:
-Pre-installed in consumer electronic devices (e.g., smartphones, tablets, personal computers) at the time of manufacture;
-Embedded in system images or recovery partitions;
-As part of device firmware;
-Pre-installed on new devices through OEM channels.
-V. Disclaimer of Warranties and Limitation of Liability
-No Warranty:  
-  The Work is provided "as is," and Contributors make no representations or warranties regarding its applicability, security, or accuracy.  
-Limitation of Liability:  
-  Contributors shall not be liable for any direct, indirect, incidental, special, or consequential damages (including data loss, goodwill damage, etc.).  
-Third-Party Risks:  
-  If the Original Work includes third-party code, users assume sole responsibility for compliance with applicable laws; Contributors shall not bear joint and several liability.  
-VI. Termination of the Agreement
 
- Automatic Termination:  
-   In the event of a breach (e.g., commercial use, closed-source distribution), the rights granted under this Agreement automatically terminate. Users must immediately cease use and destroy all copies.  
- Restoration:  
-   First-time violators may restore rights within 30 days by correcting the breach and providing written confirmation of compliance (limited to one opportunity).  
-VII. Miscellaneous Provisions
- Protocol Upgrades:  
-   Contributors may publish new versions of the Agreement. Users may choose to comply with NCRPL v1.1 or subsequent versions, but Derivative Works must be upgraded accordingly.  
- Governing Law:  
-   This Agreement is governed by copyright law and the laws of the Contributor’s jurisdiction. Disputes shall be resolved through arbitration (excluding class litigation).  
-  Severability:  
-  If any provision is invalid, the remaining provisions shall remain in full force and effect.
+### I. Definitions
+
+**This Agreement**: Refers to the Reciprocal Public License version 1.1.
+**Original Work**: Source code, documentation, design, or other original content published under this Agreement (explicitly including data, algorithms, and interface designs).
+**Derivative Works**: Works created by modifying, translating, reorganizing, integrating with other content, or forming through dynamic linking, service invocation, or other means that depend on the core functionality of the Original Work.
+**Contributor**: The copyright holder of the Original Work and subsequent modifiers authorized by the Contributor.
+
+### II. Granted Rights
+
+**Non-Exclusive, Worldwide License**:
+Allows free use, reproduction, and distribution of the Original Work and Derivative Works, **including commercial use**.
+**Modification and Creation of Derivative Works**:
+Permits modification of the Original Work and creation of Derivative Works, provided compliance with the distribution requirements in Section III.
+**Patent Grant**:
+Contributors grant users an irrevocable, royalty-free patent license covering patents related to their contributions.
+
+### III. Distribution Requirements
+
+**Source Code Obligation**:
+When distributing the Original Work or Derivative Works, complete and compilable source code (including build scripts and dependency instructions) must be provided.
+**Protocol Consistency**:
+Derivative Works must be published under terms identical to this Agreement (additional restrictions or closed-source exceptions are prohibited).
+**Attribution Requirement**:
+All copies and Derivative Works must retain, in a prominent manner, the original copyright notice, license notice, disclaimer of warranties, modification records, and new modifier attributions.
+
+### IV. Limitations
+
+**Compatibility Restriction**:
+This Agreement is incompatible with Copyleft licenses such as GPL/AGPL and must not be combined with other licenses.
+
+### V. Disclaimer of Warranties and Limitation of Liability
+
+**No Warranty**:
+The Work is provided "as is," and Contributors make no representations or warranties regarding its applicability, security, or accuracy.
+**Limitation of Liability**:
+Contributors shall not be liable for any direct, indirect, incidental, special, or consequential damages (including data loss, goodwill damage, etc.).
+**Third-Party Risks**:
+If the Original Work includes third-party code, users assume sole responsibility for compliance with applicable laws; Contributors shall not bear joint and several liability.
+
+### VI. Termination of the Agreement
+
+**Automatic Termination**:
+In the event of a breach (**e.g., closed-source distribution**), the rights granted under this Agreement automatically terminate. Users must immediately cease use and destroy all copies.
+
+### VII. Miscellaneous Provisions
+
+**Protocol Upgrades**:
+Contributors may publish new versions of the Agreement. Users may choose to comply with RPL v1.1 or subsequent versions, but Derivative Works must be upgraded accordingly.
+**Governing Law**:
+This Agreement is governed by copyright law and the laws of the Contributor’s jurisdiction. Disputes shall be resolved through arbitration (excluding class litigation).
+**Severability**:
+If any provision is invalid, the remaining provisions shall remain in full force and effect.

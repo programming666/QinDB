@@ -1,6 +1,7 @@
 # qinDB - 现代化轻量级关系型数据库
 
-[![Version](https://img.shields.io/badge/version-1.0.0-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.0-orange.svg)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/license-RPL%20v2.0-blue.svg)](LICENSE)
 
 ## 项目简介
 
@@ -9,13 +10,29 @@
 ### 核心特性
 
 - 🔍 **完整的 SQL 解析器** - 支持词法分析、语法分析和 AST 生成
-- 📊 **60+ 种数据类型索引** - 支持整数、浮点数、字符串、日期时间等多种数据类型
+- 📊 **60+ 种数据类型索引** - 支持整数、浮点数、字符串、日期时间、JSON、UUID等多种数据类型
 - 🚀 **高性能 B+ 树索引** - 基于泛型实现的 B+ 树，支持快速数据检索
+- 📚 **多种索引类型** - 支持哈希索引、复合索引、倒排索引（全文搜索）
 - 🔐 **用户认证系统** - 完整的用户管理和权限控制
-- 🌐 **网络服务器** - 支持 TCP/IP 连接的网络数据库服务
+- 🌐 **网络服务器** - 支持 TCP/IP 连接的网络数据库服务，内置TLS加密
 - 📝 **详细日志记录** - 完整的系统日志和分析日志功能
 - 🎯 **交互式 CLI** - 友好的命令行界面，支持多行 SQL 输入
 - 💾 **持久化存储** - 基于 WAL 的数据持久化机制
+- ⚡ **查询优化器** - 基于成本模型的智能查询优化
+- 🔄 **事务支持** - 完整的ACID事务机制
+- 💨 **查询缓存** - 智能查询结果缓存，提升重复查询性能
+- 📈 **统计信息** - 自动收集表和索引统计信息，辅助查询优化
+- 🛡️ **安全特性** - Argon2id密码哈希、TLS加密传输、SQL注入防护
+
+### 新增功能 (v2.0)
+
+- ⚡ **智能查询优化器** - 基于成本模型的查询计划优化，支持单表和多表连接优化
+- 🔄 **完整事务支持** - 支持BEGIN、COMMIT、ROLLBACK，保证ACID特性
+- 💨 **多级缓存系统** - 查询缓存和表缓存，显著提升重复查询性能
+- 📚 **丰富索引类型** - 除了B+树索引，新增哈希索引、复合索引、全文索引
+- 📊 **自动统计信息** - 自动收集和更新表/索引统计信息，辅助优化决策
+- 💾 **高级存储特性** - WAL日志、清理机制、空间回收
+- 📤 **数据导出功能** - 支持CSV、JSON等多种格式的数据导出
 
 ## 快速开始
 
@@ -67,8 +84,8 @@ cmake build --build --config release
 
 ```
 ╔═══════════════════════════════════════════════════════════╗
-║                      qinDB v1.0.0                         ║
-║                      关系型数据库                         ║
+║                      qinDB v2.0.0                         ║
+║                 现代化关系型数据库                        ║
 ╚═══════════════════════════════════════════════════════════╝
 
 欢迎来到qinDB!
@@ -119,9 +136,18 @@ SHOW TABLES;
 ### 3. 索引管理
 
 ```sql
--- 创建索引（支持60+种数据类型）
+-- 创建B+树索引（支持60+种数据类型）
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_age ON users(age);
+
+-- 创建哈希索引
+CREATE HASH INDEX idx_users_username ON users(username);
+
+-- 创建复合索引
+CREATE INDEX idx_users_name_age ON users(name, age);
+
+-- 创建全文索引（倒排索引）
+CREATE FULLTEXT INDEX idx_posts_content ON posts(content);
 
 -- 删除索引
 DROP INDEX idx_users_email;
@@ -162,9 +188,35 @@ HAVING COUNT(*) > 1;
 
 -- 限制结果
 SELECT * FROM users ORDER BY created_at DESC LIMIT 10;
+
+-- 全文搜索
+SELECT * FROM posts 
+WHERE MATCH(content) AGAINST('数据库优化');
+
+-- 子查询优化
+SELECT name FROM users 
+WHERE id IN (SELECT user_id FROM orders WHERE amount > 1000);
 ```
 
-### 6. 用户管理
+### 6. 事务管理
+
+```sql
+-- 开始事务
+BEGIN TRANSACTION;
+
+-- 执行多个操作
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+UPDATE accounts SET balance = balance + 100 WHERE id = 2;
+INSERT INTO transactions (from_id, to_id, amount) VALUES (1, 2, 100);
+
+-- 提交事务
+COMMIT;
+
+-- 回滚事务
+ROLLBACK;
+```
+
+### 7. 用户管理
 
 qinDB 提供了完整的用户管理系统，支持用户创建、密码修改、权限控制等功能。
 
@@ -199,6 +251,20 @@ DROP USER qin;
 ```
 
 **注意**: 不能删除最后一个管理员用户（系统保护机制）
+
+### 8. 数据导出
+
+```sql
+-- 导出查询结果到CSV文件
+EXPORT TO 'users.csv' DELIMITER ',' 
+SELECT * FROM users;
+
+-- 导出特定格式的数据
+EXPORT TO 'report.json' FORMAT JSON
+SELECT u.name, COUNT(p.id) as post_count 
+FROM users u LEFT JOIN posts p ON u.id = p.user_id 
+GROUP BY u.name;
+```
 
 #### 查询用户信息
 
@@ -255,12 +321,29 @@ ConsoleOutput=true          # 是否输出日志到控制台
 [Database]
 BufferPoolSize=1024         # 缓冲池大小（页数）
 DefaultDbPath=qindb.db      # 默认数据库路径
+EnableTransaction=true      # 是否启用事务支持
+WalEnabled=true            # 是否启用WAL日志
+
+[Cache]
+QueryCacheEnabled=true      # 是否启用查询缓存
+QueryCacheSize=100         # 查询缓存最大条目数
+QueryCacheMemory=64        # 查询缓存最大内存(MB)
+QueryCacheTTL=300          # 查询缓存过期时间(秒)
+TableCacheEnabled=true     # 是否启用表缓存
+TableCacheSize=50          # 表缓存最大数量
 
 [Network]
 Enabled=true                # 是否启用网络服务器
 Address=0.0.0.0             # 服务器监听地址
 Port=24678                  # 服务器端口
 MaxConnections=1000         # 最大连接数
+TlsEnabled=false           # 是否启用TLS加密
+AutoGenerateCerts=true     # 是否自动生成证书
+
+[Optimizer]
+EnableCostOptimizer=true    # 是否启用成本优化器
+AutoUpdateStatistics=true  # 是否自动更新统计信息
+StatisticsSampleRate=0.1   # 统计信息采样率
 ```
 
 ### TLS 加密与证书生成
@@ -409,7 +492,10 @@ qindb/
 
 ## 许可证
 
-本项目采用 NCRPL 许可证，详见 [LICENSE](LICENSE) 文件。
+本项目采用 RPL v2.0 (互惠公共许可) 许可证，允许商业使用，详见 [LICENSE](LICENSE) 文件。
+
+### 许可证变更说明
+从 v2.0 版本开始，本项目移除了商业使用限制，允许用户自由地将qinDB用于商业目的，无需额外授权。这一变更旨在促进项目的广泛应用和社区发展。
 
 本项目使用以下LGPL许可的组件：
 

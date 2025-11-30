@@ -66,6 +66,15 @@ public:
     bool isShowSummary() const { return showSummary_; }
     void setShowSummary(bool enabled) { showSummary_ = enabled; }
 
+    bool isSlowQueryEnabled() const { return slowQueryEnabled_; }
+    void setSlowQueryEnabled(bool enabled) { slowQueryEnabled_ = enabled; }
+
+    int getSlowQueryThresholdMs() const { return slowQueryThresholdMs_; }
+    void setSlowQueryThresholdMs(int ms) { slowQueryThresholdMs_ = ms; }
+
+    QString getSlowQueryLogPath() const { return slowQueryLogPath_; }
+    void setSlowQueryLogPath(const QString& path) { slowQueryLogPath_ = path; }
+
     // ========== 系统日志配置 ==========
 
     /**
@@ -205,6 +214,10 @@ private:
     bool sslEnabled_;              // 是否启用 SSL/TLS
     QString sslCertPath_;          // SSL 证书路径
     QString sslKeyPath_;           // SSL 私钥路径
+
+    bool slowQueryEnabled_;
+    int slowQueryThresholdMs_;
+    QString slowQueryLogPath_;
 
     QString configPath_;           // 配置文件路径
     mutable QMutex mutex_;         // 线程安全

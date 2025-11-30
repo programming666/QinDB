@@ -33,6 +33,9 @@ void Config::loadDefaults() {
     analysisLogPath_ = "qindb_analysis.log";
     showResults_ = true;              // 默认显示查询结果
     showSummary_ = true;              // 默认显示简洁消息
+    slowQueryEnabled_ = false;
+    slowQueryThresholdMs_ = 500;
+    slowQueryLogPath_ = "qindb_slow.log";
 
     // 系统日志配置
     systemLogPath_ = "qindb.log";
@@ -79,6 +82,9 @@ bool Config::load(const QString& configPath) {
     analysisLogPath_ = settings.value("Output/AnalysisLogPath", analysisLogPath_).toString();
     showResults_ = settings.value("Output/ShowResults", showResults_).toBool();
     showSummary_ = settings.value("Output/ShowSummary", showSummary_).toBool();
+    slowQueryEnabled_ = settings.value("Output/SlowQueryEnabled", slowQueryEnabled_).toBool();
+    slowQueryThresholdMs_ = settings.value("Output/SlowQueryThresholdMs", slowQueryThresholdMs_).toInt();
+    slowQueryLogPath_ = settings.value("Output/SlowQueryLogPath", slowQueryLogPath_).toString();
 
     // 读取系统日志配置
     systemLogPath_ = settings.value("SystemLog/LogPath", systemLogPath_).toString();
@@ -128,6 +134,9 @@ bool Config::save() {
     settings.setValue("Output/AnalysisLogPath", analysisLogPath_);
     settings.setValue("Output/ShowResults", showResults_);
     settings.setValue("Output/ShowSummary", showSummary_);
+    settings.setValue("Output/SlowQueryEnabled", slowQueryEnabled_);
+    settings.setValue("Output/SlowQueryThresholdMs", slowQueryThresholdMs_);
+    settings.setValue("Output/SlowQueryLogPath", slowQueryLogPath_);
 
     // 保存系统日志配置
     settings.setValue("SystemLog/LogPath", systemLogPath_);
@@ -169,6 +178,9 @@ bool Config::createDefaultConfig(const QString& configPath) {
     settings.setValue("Output/AnalysisLogPath", "qindb_analysis.log");
     settings.setValue("Output/ShowResults", true);
     settings.setValue("Output/ShowSummary", true);
+    settings.setValue("Output/SlowQueryEnabled", false);
+    settings.setValue("Output/SlowQueryThresholdMs", 500);
+    settings.setValue("Output/SlowQueryLogPath", "qindb_slow.log");
 
     // 系统日志配置
     settings.setValue("SystemLog/LogPath", "qindb.log");
