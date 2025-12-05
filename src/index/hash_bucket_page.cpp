@@ -1,5 +1,4 @@
 #include "qindb/hash_bucket_page.h"
-#include "qindb/logger.h"
 #include <cstring>
 
 namespace qindb {
@@ -36,9 +35,6 @@ bool HashBucketPage::insert(Page* page, const QByteArray& key, RowId value) {
         // (would require finding and modifying the existing entry)
         return false;
     }
-
-    // Calculate required space
-    size_t entrySize = KEY_SIZE_FIELD + key.size() + VALUE_SIZE_FIELD + VALUE_DATA_SIZE;
 
     // Check if page has enough space
     if (isFull(page, key.size())) {

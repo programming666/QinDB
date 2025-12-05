@@ -28,9 +28,9 @@ QPair<QSslCertificate, QSslKey> CertificateGenerator::generateSelfSignedCertific
 #ifdef _WIN32
     auto toW = [](const QString& s) { return std::wstring(s.toStdWString()); };
 
-    HCRYPTPROV hProv = NULL;
-    HCRYPTKEY hKey = NULL;
-    PCCERT_CONTEXT pCert = NULL;
+    HCRYPTPROV hProv = 0;
+    HCRYPTKEY hKey = 0;
+    PCCERT_CONTEXT pCert = nullptr;
 
     QString container = QUuid::createUuid().toString(QUuid::WithoutBraces);
     std::wstring wContainer = toW(container);
@@ -166,7 +166,6 @@ QPair<QSslCertificate, QSslKey> CertificateGenerator::generateSelfSignedCertific
     };
 
     const BYTE* p = reinterpret_cast<const BYTE*>(blob.constData());
-    const BLOBHEADER* hdr = reinterpret_cast<const BLOBHEADER*>(p);
     p += sizeof(BLOBHEADER);
     const RSAPUBKEY* rsa = reinterpret_cast<const RSAPUBKEY*>(p);
     p += sizeof(RSAPUBKEY);
@@ -266,6 +265,7 @@ QPair<QSslCertificate, QSslKey> CertificateGenerator::generateSelfSignedCertific
 }
 
 QSslKey CertificateGenerator::generateRSAKey(int keySize) {
+    Q_UNUSED(keySize);
     return QSslKey();
 }
 
@@ -276,6 +276,11 @@ QSslCertificate CertificateGenerator::createX509Certificate(
     const QString& organization,
     int validityDays)
 {
+    Q_UNUSED(publicKey);
+    Q_UNUSED(privateKey);
+    Q_UNUSED(commonName);
+    Q_UNUSED(organization);
+    Q_UNUSED(validityDays);
     return QSslCertificate();
 }
 

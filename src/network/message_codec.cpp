@@ -240,7 +240,6 @@ QByteArray MessageCodec::encodeQueryResponse(const QueryResponse& result) {
 
             if (!isNull) {
                 // 编码值
-                uint8_t colType = (i < result.columns.size()) ? result.columns[i].type : 0;
                 encodeVariant(stream, value);
             }
         }

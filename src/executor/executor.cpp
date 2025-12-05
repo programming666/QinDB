@@ -865,8 +865,8 @@ QueryResult Executor::executeSelect(const SelectStatement* stmt) {
                     const Expression* expr = actualStmt->selectList[i].get();
 
                     // 如果有别名，使用别名
-                    if (i < actualStmt->selectAliases.size() && !actualStmt->selectAliases[i].isEmpty()) {
-                        result.columnNames.append(actualStmt->selectAliases[i]);
+                    if (i < static_cast<size_t>(actualStmt->selectAliases.size()) && !actualStmt->selectAliases[static_cast<qsizetype>(i)].isEmpty()) {
+                        result.columnNames.append(actualStmt->selectAliases[static_cast<qsizetype>(i)]);
                     }
                     // 如果是列表达式，使用列名
                     else if (const ColumnExpression* colExpr = dynamic_cast<const ColumnExpression*>(expr)) {

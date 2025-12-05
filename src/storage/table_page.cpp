@@ -699,6 +699,7 @@ bool TablePage::deleteRecord(Page* page, int slotIndex, TransactionId txnId) {
 bool TablePage::updateRecord(Page* page, const TableDef* tableDef,
                             int slotIndex, const QVector<QVariant>& newValues,
                             TransactionId txnId) {
+    Q_UNUSED(txnId);
     if (!page || !tableDef) {
         return false;
     }

@@ -31,6 +31,7 @@ CostEstimate CostModel::estimateSeqScanCost(const TableStats& stats, double sele
 CostEstimate CostModel::estimateIndexScanCost(const TableStats& stats,
                                               const QString& indexName,
                                               double selectivity) const {
+    Q_UNUSED(indexName);
     CostEstimate cost;
 
     // 估算返回的行数（向上取整，避免小表估算为 0）

@@ -1,4 +1,5 @@
 #include "benchmark_framework.h"
+#include "qindb/logger.h"
 #include "qindb/buffer_pool_manager.h"
 #include "qindb/disk_manager.h"
 #include <QTemporaryFile>
@@ -17,7 +18,10 @@ public:
     void setup() override {
         tempFile_ = new QTemporaryFile();
         tempFile_->setAutoRemove(true);
-        tempFile_->open();
+        if (!tempFile_->open()) {
+             LOG_ERROR("Failed to open temporary file");
+             return;
+        }
         dbPath_ = tempFile_->fileName();
         tempFile_->close();
 

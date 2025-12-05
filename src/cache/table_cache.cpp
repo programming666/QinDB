@@ -262,22 +262,22 @@ uint64_t TableCache::estimateMemorySize(const QVector<QVector<QVariant>>& rows) 
     // 估算每行的大小
     for (const auto& row : rows) {
         for (const auto& value : row) {
-            switch (value.type()) {
-                case QVariant::Int:
-                case QVariant::UInt:
+            switch (value.typeId()) {
+                case QMetaType::Int:
+                case QMetaType::UInt:
                     size += sizeof(int);
                     break;
-                case QVariant::LongLong:
-                case QVariant::ULongLong:
+                case QMetaType::LongLong:
+                case QMetaType::ULongLong:
                     size += sizeof(qint64);
                     break;
-                case QVariant::Double:
+                case QMetaType::Double:
                     size += sizeof(double);
                     break;
-                case QVariant::String:
+                case QMetaType::QString:
                     size += value.toString().size() * sizeof(QChar);
                     break;
-                case QVariant::ByteArray:
+                case QMetaType::QByteArray:
                     size += value.toByteArray().size();
                     break;
                 default:

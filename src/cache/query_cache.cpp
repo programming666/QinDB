@@ -1,7 +1,6 @@
 #include "qindb/query_cache.h"  // 引入查询缓存头文件
 #include "qindb/logger.h"      // 引入日志记录头文件
 #include <QMutexLocker>        // 引入互斥锁保护头文件
-#include <algorithm>           // 引入算法头文件
 
 namespace qindb {  // 定义 qindb 命名空间
 

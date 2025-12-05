@@ -4,7 +4,6 @@
 #include <QRandomGenerator>
 #include <QCryptographicHash>
 #include <cstring>
-#include <algorithm>
 
 namespace qindb {
 
@@ -242,6 +241,8 @@ QByteArray Argon2id::blake2bLong(const QByteArray& input, uint32_t outlen) {
 
 void Argon2id::initialize(Context& ctx, const QByteArray& password, 
                          const QByteArray& salt, const Parameters& params) {
+    Q_UNUSED(password);
+    Q_UNUSED(salt);
     ctx.params = params;
     ctx.lanes = params.parallelism;
     ctx.timeCost = params.timeCost;
@@ -383,6 +384,7 @@ uint32_t Argon2id::indexAlpha(Context& ctx, uint32_t pass, uint32_t slice,
     
     // Argon2id: 前半部分使用Argon2i，后半部分使用Argon2d
     bool dataDependent = (pass != 0) || (slice >= 2);
+    Q_UNUSED(dataDependent);
     
     if (pass == 0 && slice == 0) {
         refLane = static_cast<uint32_t>(pseudoRand >> 32) % ctx.lanes;

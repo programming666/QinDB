@@ -1,8 +1,10 @@
 #include "benchmark_framework.h"    // 引入基准测试框架头文件，提供基准测试的基础设施
+#include "qindb/logger.h"
 #include "qindb/generic_bplustree.h"  // 引入B+树通用实现头文件，提供B+树数据结构的实现
 #include "qindb/buffer_pool_manager.h"  // 引入缓冲池管理器头文件，管理内存缓冲区
 #include "qindb/disk_manager.h"    // 引入磁盘管理器头文件
 #include "qindb/config.h"      // 引入配置管理头文件
+#include "qindb/logger.h"
 #include <QTemporaryFile>     // 引入Qt临时文件类，用于创建临时测试文件
 #include <random>         // 引入随机数生成库，用于生成随机测试数据
 
@@ -25,7 +27,10 @@ public:
     void setup() override {
         tempFile_ = new QTemporaryFile();  // 创建临时文件对象
         tempFile_->setAutoRemove(true);   // 设置自动删除
-        tempFile_->open();                // 打开临时文件
+        if (!tempFile_->open()) {         // 打开临时文件
+             LOG_ERROR("Failed to open temporary file");
+             return;
+        }
         dbPath_ = tempFile_->fileName();  // 获取文件路径
         tempFile_->close();               // 关闭文件
 

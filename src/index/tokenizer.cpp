@@ -211,8 +211,7 @@ bool Tokenizer::isChineseChar(QChar ch) {
     // Unicode 中文字符范围
     ushort unicode = ch.unicode();
     return (unicode >= 0x4E00 && unicode <= 0x9FFF) ||  // CJK 统一汉字
-           (unicode >= 0x3400 && unicode <= 0x4DBF) ||  // CJK 扩展 A
-           (unicode >= 0x20000 && unicode <= 0x2A6DF);  // CJK 扩展 B
+           (unicode >= 0x3400 && unicode <= 0x4DBF);   // CJK 扩展 A
 }
 
 } // namespace qindb

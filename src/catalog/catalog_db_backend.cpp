@@ -1,5 +1,4 @@
 #include "qindb/catalog_db_backend.h"  // 包含目录数据库后端的头文件
-#include "qindb/system_tables.h"      // 包含系统表定义的头文件
 #include "qindb/buffer_pool_manager.h" // 包含缓冲池管理器的头文件
 #include "qindb/disk_manager.h"       // 包含磁盘管理器的头文件
 #include "qindb/table_page.h"        // 包含表页面的头文件

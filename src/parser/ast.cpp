@@ -1,4 +1,4 @@
-﻿#include "qindb/ast.h"
+#include "qindb/ast.h"
 
 namespace qindb {
 namespace ast {
@@ -78,7 +78,7 @@ QString AggregateExpression::toString() const {
 
 QString FunctionCallExpression::toString() const {
     QString result = name + "(";
-    for (qsizetype i = 0; i < arguments.size(); ++i) {
+    for (size_t i = 0; i < arguments.size(); ++i) {
         if (i > 0) result += ", ";
         result += arguments[i]->toString();
     }
@@ -153,11 +153,11 @@ QString SelectStatement::toString() const {
     QString result = "SELECT ";
     if (distinct) result += "DISTINCT ";
 
-    for (qsizetype i = 0; i < selectList.size(); ++i) {
+    for (size_t i = 0; i < selectList.size(); ++i) {
         if (i > 0) result += ", ";
         result += selectList[i]->toString();
-        if (i < selectAliases.size() && !selectAliases[i].isEmpty()) {
-            result += " AS " + selectAliases[i];
+        if (i < static_cast<size_t>(selectAliases.size()) && !selectAliases[static_cast<qsizetype>(i)].isEmpty()) {
+            result += " AS " + selectAliases[static_cast<qsizetype>(i)];
         }
     }
 
@@ -175,7 +175,7 @@ QString SelectStatement::toString() const {
 
     if (groupBy) {
         result += " GROUP BY ";
-        for (qsizetype i = 0; i < groupBy->expressions.size(); ++i) {
+        for (size_t i = 0; i < groupBy->expressions.size(); ++i) {
             if (i > 0) result += ", ";
             result += groupBy->expressions[i]->toString();
         }
@@ -186,7 +186,7 @@ QString SelectStatement::toString() const {
 
     if (!orderBy.empty()) {
         result += " ORDER BY ";
-        for (qsizetype i = 0; i < orderBy.size(); ++i) {
+        for (size_t i = 0; i < orderBy.size(); ++i) {
             if (i > 0) result += ", ";
             result += orderBy[i].expression->toString();
             result += orderBy[i].ascending ? " ASC" : " DESC";
@@ -221,10 +221,10 @@ QString InsertStatement::toString() const {
         result += " " + selectQuery->toString();
     } else {
         result += " VALUES ";
-        for (qsizetype i = 0; i < values.size(); ++i) {
+        for (size_t i = 0; i < values.size(); ++i) {
             if (i > 0) result += ", ";
             result += "(";
-            for (qsizetype j = 0; j < values[i].size(); ++j) {
+            for (size_t j = 0; j < values[i].size(); ++j) {
                 if (j > 0) result += ", ";
                 result += values[i][j]->toString();
             }
@@ -266,7 +266,7 @@ QString CreateTableStatement::toString() const {
     if (ifNotExists) result += "IF NOT EXISTS ";
     result += tableName + " (";
 
-    for (qsizetype i = 0; i < columns.size(); ++i) {
+    for (size_t i = 0; i < columns.size(); ++i) {
         if (i > 0) result += ", ";
         const auto& col = columns[i];
         result += col.name + " ";

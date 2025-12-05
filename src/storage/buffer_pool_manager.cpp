@@ -329,6 +329,7 @@ int BufferPoolManager::findVictim() {
     // 注意：此函数假设已经持有 mutex_
 
     size_t startPos = clockHand_;
+    Q_UNUSED(startPos);
     size_t numScanned = 0;
 
     while (numScanned < poolSize_ * 2) {  // 最多扫描两圈

@@ -2,7 +2,6 @@
 #include "qindb/bplus_tree.h"  // 包含BPlusTreePageHeader定义
 #include "qindb/logger.h"  // 日志记录功能
 #include <QDataStream>  // Qt数据流，用于序列化
-#include <algorithm>  // 标准算法库
 
 namespace qindb {
 
@@ -924,14 +923,14 @@ bool GenericBPlusTree::writeLeafEntries(Page* page, const QVector<KeyValuePair>&
     }
 
     // 计算所需空间
-    int totalSize = sizeof(uint16_t);  // 条目数量
+    size_t totalSize = sizeof(uint16_t);  // 条目数量
     for (const auto& entry : entries) {
         totalSize += sizeof(uint16_t);  // 键大小
         totalSize += entry.serializedKey.size();  // 键数据
         totalSize += sizeof(RowId);  // 值
     }
 
-    if (totalSize > PAGE_SIZE - sizeof(BPlusTreePageHeader)) {
+    if (static_cast<size_t>(totalSize) > PAGE_SIZE - sizeof(BPlusTreePageHeader)) {
         LOG_ERROR(QString("Leaf entries too large: %1 bytes").arg(totalSize));
         return false;
     }
@@ -1012,14 +1011,14 @@ bool GenericBPlusTree::writeInternalEntries(Page* page, const QVector<InternalEn
     }
 
     // 计算所需空间
-    int totalSize = sizeof(PageId) + sizeof(uint16_t);  // firstChild + 条目数量
+    size_t totalSize = sizeof(PageId) + sizeof(uint16_t);  // firstChild + 条目数量
     for (const auto& entry : entries) {
         totalSize += sizeof(uint16_t);  // 键大小
         totalSize += entry.serializedKey.size();  // 键数据
         totalSize += sizeof(PageId);  // 子页面ID
     }
 
-    if (totalSize > PAGE_SIZE - sizeof(BPlusTreePageHeader)) {
+    if (static_cast<size_t>(totalSize) > PAGE_SIZE - sizeof(BPlusTreePageHeader)) {
         LOG_ERROR(QString("Internal entries too large: %1 bytes").arg(totalSize));
         return false;
     }

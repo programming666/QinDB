@@ -57,6 +57,7 @@ std::unique_ptr<PlanNode> CostOptimizer::optimizeSelect(const ast::SelectStateme
 
 std::unique_ptr<PlanNode> CostOptimizer::optimizeJoin(const QVector<QString>& tables,
                                                       const QVector<ast::Expression*>& joinConditions) {
+    Q_UNUSED(joinConditions);
     if (tables.isEmpty()) {
         return nullptr;
     }
@@ -246,8 +247,8 @@ std::unique_ptr<PlanNode> CostOptimizer::optimizeJoinOrderGreedy(const QVector<Q
         PlanNodeType bestJoinType = PlanNodeType::NESTED_LOOP_JOIN;
 
         // 找到成本最小的连接对
-        for (int i = 0; i < plans.size(); i++) {
-            for (int j = i + 1; j < plans.size(); j++) {
+        for (size_t i = 0; i < plans.size(); i++) {
+            for (size_t j = i + 1; j < plans.size(); j++) {
                 const TableStats* leftStats = getTableStats(plans[i]->tableName);
                 const TableStats* rightStats = getTableStats(plans[j]->tableName);
 
